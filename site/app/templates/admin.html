@@ -16,16 +16,9 @@
 {% set active_prov = w.current_provider if w.available else none %}
 {% set db = status.components.database %}
 
-{# ── Flash-сообщения ─────────────────────────────────────────────────────── #}
-{% if test_result %}
-  <div class="ai-flash ai-flash--{{ 'ok' if test_result.ok else 'err' }}">
-    {% if test_result.ok %}✓{% else %}✕{% endif %}
-    Проверка «{{ test_result.provider }}»: {{ test_result.message }}
-  </div>
-{% elif is_demo %}
+{# ── Демо-режим (постоянный баннер, только demo) ─────────────────────────── #}
+{% if is_demo %}
   <div class="ai-alert ai-alert--demo">Демо-режим. Просмотр разрешён, изменение конфигурации заблокировано на backend (POST /admin → 403).</div>
-{% elif saved %}
-  <div class="ai-alert ai-alert--ok">✓ Конфигурация сохранена. Обработчик применит её на следующем цикле опроса без рестарта.</div>
 {% endif %}
 
 {# ── Состояние системы (ридонли) ────────────────────────────────────────── #}
@@ -283,5 +276,31 @@
   </summary>
   <pre class="ai-pre">{{ status_json }}</pre>
 </details>
+
+{# ── Toast-результаты действий (снизу, не сдвигают контент, авто-исчезновение) #}
+{% if test_result or saved %}
+  <div class="ai-toast-stack">
+    {% if test_result %}
+      <div class="ai-flash ai-flash--{{ 'ok' if test_result.ok else 'err' }} ai-toast">
+        {% if test_result.ok %}✓{% else %}✕{% endif %}
+        Проверка «{{ test_result.provider }}»: {{ test_result.message }}
+      </div>
+    {% elif saved %}
+      <div class="ai-alert ai-alert--ok ai-toast">✓ Конфигурация сохранена. Обработчик применит её на следующем цикле опроса без рестарта.</div>
+    {% endif %}
+  </div>
+  <script>
+    (function () {
+      document.querySelectorAll('.ai-toast').forEach(function (t) {
+        setTimeout(function () {
+          t.style.transition = 'opacity .4s ease, transform .4s ease';
+          t.style.opacity = '0';
+          t.style.transform = 'translateY(8px)';
+          setTimeout(function () { t.remove(); }, 450);
+        }, 5000);
+      });
+    })();
+  </script>
+{% endif %}
 
 {% endblock %}

@@ -343,6 +343,15 @@
     .ai-flash--ok { color: var(--ai-success); background-color: rgba(34,197,94,0.12); }
     .ai-flash--err { color: var(--ai-error); background-color: rgba(239,68,68,0.12); }
 
+    /* Toast-слой результатов действий: фиксировано снизу, не сдвигает контент,
+       авто-исчезновение через JS. z-index выше сайдбара и тултипов. */
+    .ai-toast-stack { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+      z-index: 1100; display: flex; flex-direction: column; gap: 8px;
+      max-width: min(640px, 90vw); width: max-content; }
+    .ai-toast-stack .ai-toast { margin-bottom: 0; box-shadow: var(--ai-shadow);
+      border: 1px solid var(--ai-border); white-space: nowrap; }
+    @media (max-width: 760px) { .ai-toast-stack { bottom: 12px; } .ai-toast-stack .ai-toast { white-space: normal; } }
+
     @media (max-width: 1024px) {
       .ai-grid--4, .ai-grid--5 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .ai-config-top { grid-template-columns: 1fr; }
