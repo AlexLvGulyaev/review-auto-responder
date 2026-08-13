@@ -76,8 +76,8 @@ def write_worker_status() -> None:
         "providers": {
             "openai": bool(settings.openai_api_key),
             "gigachat": bool(settings.gigachat_auth_key),
-            "yandex": bool(settings.yandex_api_key),
         },
+        "telegram": bool(settings.telegram_bot_token and settings.telegram_user_chat_id),
     }
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 

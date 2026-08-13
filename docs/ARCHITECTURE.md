@@ -159,16 +159,15 @@ flowchart TD
 
 | Провайдер | Реализация | Ключ |
 |-----------|-----------|------|
-| OpenAI / «Свой» | `OpenAICompatibleProvider` (AsyncOpenAI, `base_url` из runtime) | `OPENAI_API_KEY` (.env) |
+| OpenAI | `OpenAICompatibleProvider` (AsyncOpenAI, `base_url` из runtime) | `OPENAI_API_KEY` (.env) |
 | GigaChat | `GigaChatProvider` → `GigaChatAdapter` (urllib, OAuth per-request) | `GIGACHAT_AUTH_KEY` (.env) |
-| YandexGPT | `OpenAICompatibleProvider` + `x-folder-id` header + `<folder_id>` в модели | `YANDEX_API_KEY` (.env) |
 
 ### 🤖 5.2. Разделение секретов и runtime-параметров
 
 | Где | Что | Кто меняет |
 |-----|-----|-----------|
 | `.env` | API-ключи (секреты) | Владелец/инженер (перед развёртыванием) |
-| `config.json` (shared volume) | `provider`, `openai_model`, `openai_base_url`, `yandex_folder_id` | Оператор через `/admin` (без рестарта) |
+| `config.json` (shared volume) | `provider`, `openai_model`, `openai_base_url`, `gigachat_model` | Оператор через `/admin` (без рестарта) |
 | `system_prompt.md` (shared volume) | Текст системного промпта (файл-SOT) | Оператор через `/admin` (без рестарта) |
 
 > 📌 Ключи API **никогда** не попадают в `config.json`/`system_prompt.md`/браузер/`/admin`. `/admin` хранит только runtime-параметры и промпт.
@@ -261,8 +260,8 @@ demo допущен). Секреты и полный текст промпт-ove
 
 ### 📊 7.4. Консоль состояния системы (`/admin/status`)
 
-Read-only обзор здоровья (модель как в AI Curator `/admin/status`): `overall`
-(ok/degraded) + живые пробы компонентов (`database` — `SELECT 1` + latency) +
+Read-only обзор здоровья: `overall` (ok/degraded) + живые пробы компонентов
+(`database` — `SELECT 1` + latency) +
 метрики БД (отзывы new/processed, трейсы ok/error/started, аудит-счётчик,
 последняя сессия) + текущий применённый конфиг + liveness воркера + статус
 провайдеров (bool-флаги configured) + последние ошибки трейсов.
@@ -270,7 +269,7 @@ Read-only обзор здоровья (модель как в AI Curator `/admin
 Воркер не имеет HTTP-эндпоинта для опроса сайтом — вместо обратного направления
 зависимости воркер пишет `status.json` в **shared volume** каждую итерацию
 (`write_worker_status`): `worker_alive`, `last_iteration_at`, `current_provider`,
-`poll_interval`, `providers: {openai/gigachat/yandex: bool}`. Сайт читает файл
+`poll_interval`, `providers: {openai/gigachat: bool}`, `telegram: bool`. Сайт читает файл
 (`admin_status._read_worker_status`), liveness = `last_iteration_at` свежее
 `3 × poll_interval`. Секреты (ключи) в файл **не** пишутся — только булевы флаги.
 

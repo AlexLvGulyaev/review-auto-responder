@@ -46,9 +46,8 @@ cp .env.example .env
 | `ADMIN_TOKEN` | да | Полный доступ к `/admin` |
 | `ADMIN_DEMO_TOKEN` | да | Read-only доступ к `/admin` (демо) |
 | `ADMIN_AUTH_ENABLED` | нет | `true` (по умолчанию); `false` — только локальные тесты |
-| `OPENAI_API_KEY` | один из провайдеров | OpenAI/«Свой» |
+| `OPENAI_API_KEY` | один из провайдеров | OpenAI |
 | `GIGACHAT_AUTH_KEY` | один из провайдеров | GigaChat |
-| `YANDEX_API_KEY` | один из провайдеров | YandexGPT |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_USER_CHAT_ID` | нет | Уведомления оператору (без них — пропуск) |
 | `APP_PORT` | нет | Порт сайта на хосте (по умолчанию `8000`) |
 | `WORKER_POLL_INTERVAL` | нет | Интервал опроса, сек (по умолчанию `10`) |
@@ -174,7 +173,9 @@ curl -s "http://localhost:8000/api/reviews?status=new" | python3 -m json.tool
 
 ### 🖥️ 5.2. Смена провайдера и промпта без рестарта
 
-1. В `/admin` (токен `ADMIN_TOKEN`) выберите `provider=gigachat`, `openai_model=GigaChat-Max` → **Сохранить**.
+1. В `/admin` (токен `ADMIN_TOKEN`) в карточке GigaChat нажмите radio «Сделать
+   активным», при желании смените `gigachat_model` (по умолчанию `GigaChat-Max`)
+   → **Сохранить**.
 2. При желании отредактируйте поле «Системный промпт» — сохранение перезаписывает
    файл `system_prompt.md` на shared volume (файл-SOT).
 3. Оставьте новый отзыв (см. §4.1).
@@ -212,7 +213,7 @@ curl -s -b /tmp/admin_cookies.txt http://localhost:8000/admin/status | python3 -
 # С demo-токеном — ожидается 403
 curl -s -o /dev/null -w "%{http_code}\n" -X POST http://localhost:8000/admin \
   -H "Cookie: admin_token=<ADMIN_DEMO_TOKEN>" \
-  -d "provider=openai&openai_model=gpt-4.1-mini"
+  -d "provider=openai&openai_model=gpt-4.1-mini&openai_base_url=https://api.openai.com/v1&gigachat_model=GigaChat-Max"
 ```
 
 Ожидаемый результат: `403`.
@@ -221,7 +222,7 @@ curl -s -o /dev/null -w "%{http_code}\n" -X POST http://localhost:8000/admin \
 # С admin-токеном — ожидается 200/302 (сохранение)
 curl -s -o /dev/null -w "%{http_code}\n" -X POST http://localhost:8000/admin \
   -H "Cookie: admin_token=<ADMIN_TOKEN>" \
-  -d "provider=openai&openai_model=gpt-4.1-mini"
+  -d "provider=openai&openai_model=gpt-4.1-mini&openai_base_url=https://api.openai.com/v1&gigachat_model=GigaChat-Max"
 ```
 
 Ожидаемый результат: `200` или `302` (редирект на `?saved=1`).

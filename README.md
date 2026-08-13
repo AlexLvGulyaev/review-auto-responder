@@ -4,7 +4,7 @@
 
 > 🌐 **Живое демо:** <https://review-auto-responder.alex-n8n.site> — публичный сайт отзывов; ответы генерируются нейросетью (GigaChat). Операторская панель: <https://review-auto-responder.alex-n8n.site/admin>.
 
-> 📌 **Атрибуция:** идея и исходная архитектура взяты из учебных репозиториев преподавателя [`MrGAN12009/worker_ai`](https://github.com/MrGAN12009/worker_ai) (ассистент-обработчик) и [`MrGAN12009/app_test_2803`](https://github.com/MrGAN12009/app_test_2803) (тестовый сайт отзывов). Текущая версия переработана в единый двухсервисный проект с мультипровайдерностью (OpenAI/GigaChat/YandexGPT), операторской панелью `/admin` (смена провайдера/модели/промпта в runtime без рестарта), промптом в файле, демо-RBAC, `/health`, server-side фильтром и публичной документацией с Deployment Validation.
+> 📌 **Атрибуция:** идея и исходная архитектура взяты из учебных репозиториев преподавателя [`MrGAN12009/worker_ai`](https://github.com/MrGAN12009/worker_ai) (ассистент-обработчик) и [`MrGAN12009/app_test_2803`](https://github.com/MrGAN12009/app_test_2803) (тестовый сайт отзывов). Текущая версия переработана в единый двухсервисный проект с мультипровайдерностью (OpenAI/GigaChat), операторской панелью `/admin` (смена провайдера/модели/промпта в runtime без рестарта), промптом в файле, демо-RBAC, `/health`, server-side фильтром и публичной документацией с Deployment Validation.
 
 ---
 
@@ -24,7 +24,7 @@
 
 | Возможность | Описание |
 |-------------|----------|
-| 🤖 **Мультипровайдерность** | OpenAI / GigaChat (Сбер) / YandexGPT / «Свой» — через единую абстракцию Chat Completions |
+| 🤖 **Мультипровайдерность** | OpenAI / GigaChat (Сбер) — через единую абстракцию Chat Completions; карточки провайдеров в `/admin` |
 | 🎛️ **Смена провайдера без рестарта** | Операторская панель `/admin`: провайдер, модель, base_url, промпт — применяются на следующем цикле опроса |
 | 📝 **Промпт — файл-SOT** | `system_prompt.md` на shared volume — единственный SOT промпта; `/admin` перезаписывает его (bootstrap из вшитого `prompts/v1/system.md`) |
 | 🔐 **Демо-RBAC админки** | Два токена: полный (`ADMIN_TOKEN`) и read-only демо (`ADMIN_DEMO_TOKEN`) — backend-guard на мутации |
@@ -120,7 +120,7 @@ docker compose up -d --build
 │   ├── worker.py               # Основной цикл + execution-сессии + heartbeat
 │   ├── processor.py            # detect_tone + generate_response + fallback
 │   ├── client.py               # httpx-клиент к API сайта (rev. + executions)
-│   ├── providers/              # openai / gigachat / yandex / factory
+│   ├── providers/              # openai / gigachat / factory
 │   ├── prompts/v1/system.md    # Системный промпт (SOT текста)
 │   └── ...
 └── docs/                       # Документация
@@ -135,3 +135,4 @@ docker compose up -d --build
 | 2026-08-13 | 1.0 | Доработка legacy: мультипровайдерность, `/admin` runtime-config, промпт-в-файле, единый compose, демо-RBAC, `/health`, Deployment Validation |
 | 2026-08-13 | 1.1 | Observability: три контура — stdout-логирование (`LOG_LEVEL`), execution-tracing (`/admin/executions`), аудит (`/admin/audit`); LLM-метрики в трассах |
 | 2026-08-13 | 1.2 | AIP Dark-редизайн админки (sidebar, 4 консоли); промпт — файл-SOT на shared volume (`system_prompt.md`, bootstrap из `prompts/v1/system.md`); консоль состояния системы `/admin/status` (БД-пробы, метрики, liveness воркера через `status.json` в shared volume, статус провайдеров) |
+| 2026-08-13 | 1.3 | Конфиг-консоль: двухколоночный лэйаут (карточки провайдеров OpenAI/GigaChat слева, промпт справа); ряд состояния системы — 5 плиток (PostgreSQL/Воркер/LLM/Telegram/API); per-provider модели (`gigachat_model`); Yandex-провайдер убран из кода и docs |

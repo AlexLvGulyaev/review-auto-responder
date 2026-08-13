@@ -13,9 +13,8 @@
 | `WORKER_API_TOKEN` | `.env` (общий для site + worker) | Авторизация `PATCH` воркера |
 | `ADMIN_TOKEN` | `.env` | Полный доступ к `/admin` (мутации) |
 | `ADMIN_DEMO_TOKEN` | `.env` | Read-only доступ к `/admin` (демо) |
-| `OPENAI_API_KEY` | `.env` | Провайдер OpenAI/«Свой» |
+| `OPENAI_API_KEY` | `.env` | Провайдер OpenAI |
 | `GIGACHAT_AUTH_KEY` | `.env` | Провайдер GigaChat (OAuth-обмен) |
-| `YANDEX_API_KEY` | `.env` | Провайдер YandexGPT |
 | `TELEGRAM_BOT_TOKEN` | `.env` | Уведомления оператору |
 
 > ⚠️ **Все секреты — только в `.env`.** `.env` в `.gitignore`; в репозитории — `.env.example` с placeholder'ами `YOUR_*`. Ключи API **никогда** не попадают в файлы shared volume (`config.json`, `system_prompt.md`, `status.json`) и не передаются через `/admin`. Воркер пишет в `status.json` только булевы флаги «провайдер сконфигурирован» — не значения ключей.
@@ -91,7 +90,7 @@
 | Action | Триггер | Записывается |
 |--------|---------|--------------|
 | `admin.login_success` / `admin.login_failed` | `POST /admin/login` | user, ip, path |
-| `admin.config_update` | `POST /admin` (сохранение) | provider/model/base_url, prompt_len, prompt_changed, changed_keys |
+| `admin.config_update` | `POST /admin` (сохранение) | provider/openai_model/openai_base_url/gigachat_model, prompt_len, prompt_changed, changed_keys |
 | `admin.rbac_denied` | demo-попытка мутации → `403` | user, ip, path |
 | `auth.worker_denied` | плохой `X-Worker-Token` → `401` | ip, path |
 

@@ -111,13 +111,13 @@ Health-эндпоинт для Deployment Verification/Validation.
 
 | Поле | Тип | Описание |
 |------|-----|----------|
-| `provider` | `openai` \| `gigachat` \| `yandex` \| `custom` | Активный провайдер → `config.json` |
-| `openai_model` | str | Имя модели (для yandex — URI с `<folder_id>`) → `config.json` |
-| `openai_base_url` | str | base_url для openai/custom → `config.json` |
-| `yandex_folder_id` | str | folder_id для YandexGPT → `config.json` |
+| `provider` | `openai` \| `gigachat` | Активный провайдер (radio в карточке) → `config.json` |
+| `openai_model` | str | Модель OpenAI → `config.json` |
+| `openai_base_url` | str | base_url для OpenAI / OpenAI-compatible endpoint → `config.json` |
+| `gigachat_model` | str | Модель GigaChat → `config.json` |
 | `system_prompt` | str | Текст системного промпта → перезаписывает `system_prompt.md` (файл-SOT) |
 
-Runtime-параметры (`provider`/`model`/`base_url`/`folder_id`) → атомарная запись
+Runtime-параметры (`provider`/`openai_model`/`openai_base_url`/`gigachat_model`) → атомарная запись
 `config.json` (tempfile + `os.replace`) в shared volume. Промпт (`system_prompt`)
 → атомарная запись `system_prompt.md` в тот же shared volume. Воркер подхватывает
 оба по mtime на следующем цикле — без рестарта.
@@ -151,13 +151,14 @@ Read-only JSON-сводка (demo допущен). Формируется из �
     "recent_errors": []
   },
   "current_config": {
-    "provider": "gigachat", "model": "GigaChat-Max", "base_url": "...", "yandex_folder_id": "",
+    "provider": "gigachat", "openai_model": "gpt-4.1-mini", "openai_base_url": "https://api.openai.com/v1",
+    "gigachat_model": "GigaChat-Max",
     "prompt": { "source": "file", "exists": true, "size": 1170, "mtime": "..." }
   },
   "worker": {
     "available": true, "worker_alive": true, "age_seconds": 3.1,
     "last_iteration_at": "...", "current_provider": "gigachat", "poll_interval": 5,
-    "providers": { "openai": false, "gigachat": true, "yandex": false }
+    "providers": { "openai": false, "gigachat": true }, "telegram": true
   }
 }
 ```

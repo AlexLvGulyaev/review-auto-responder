@@ -51,14 +51,14 @@ class RuntimeConfigUpdate(BaseModel):
     """Payload of /admin — runtime parameters written to config.json.
 
     Secrets (API keys) are NOT here — only operator-tunable runtime params.
-    Empty system_prompt_override means "use the file prompts/v1/system.md".
+    The system prompt is a separate file-SOT (system_prompt.md on the shared
+    volume), not a field of config.json.
     """
 
-    provider: Literal["openai", "gigachat", "yandex", "custom"] = "openai"
+    provider: Literal["openai", "gigachat"] = "openai"
     openai_model: str = "gpt-4.1-mini"
     openai_base_url: str = "https://api.openai.com/v1"
-    yandex_folder_id: str = ""
-    system_prompt_override: str = ""
+    gigachat_model: str = "GigaChat-Max"
 
 
 # --- Execution tracing (воркер → API сайта) -------------------------------

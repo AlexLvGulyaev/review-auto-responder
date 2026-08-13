@@ -12,11 +12,10 @@ logger = logging.getLogger("worker.provider.openai")
 
 
 class OpenAICompatibleProvider(ResponseProvider):
-    """OpenAI Chat Completions — работает для OpenAI, YandexGPT и «Свой».
+    """OpenAI Chat Completions — работает для OpenAI и OpenAI-compatible endpoint.
 
-    YandexGPT — OpenAI-compatible: тот же /chat/completions, но требует
-    header `x-folder-id` и подстановки folder_id в модель. Передаётся через
-    `default_headers` и подстановку в `model` (см. factory).
+    base_url берётся из runtime-config (через /admin), что позволяет указать
+    любой OpenAI-совместимый endpoint.
     """
 
     def __init__(

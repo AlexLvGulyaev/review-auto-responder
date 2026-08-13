@@ -8,54 +8,79 @@
 
 {# ── Состояние системы (ридонли) ────────────────────────────────────────── #}
 <section class="ai-card">
-  <h2 class="ai-card__title">Состояние системы</h2>
-  <p class="ai-card__hint">Живые пробы: БД, воркер, провайдеры. Метрики из БД. Read-only.</p>
+  <div class="ai-card__head">
+    <h2 class="ai-card__title">Состояние системы</h2>
+    {% if status.overall == 'ok' %}
+      <span class="ai-status ai-status--ok">overall · ok</span>
+    {% else %}
+      <span class="ai-status ai-status--warning">overall · degraded</span>
+    {% endif %}
+  </div>
+  <p class="ai-card__hint">Живые пробы компонентов и метрики из БД. Read-only.</p>
 
-  <div class="ai-grid ai-grid--3" style="margin-bottom:12px;">
+  {% set db = status.components.database %}
+  {% set w = status.worker %}
+  {% set provs = w.providers if w.available else {} %}
+  {% set active_prov = w.current_provider if w.available else none %}
+
+  {# Ряд 1 — 5 компонентов #}
+  <div class="ai-grid ai-grid--5" style="margin-bottom:12px;">
     <div class="ai-metric">
-      <div class="ai-metric__label">Общий статус</div>
+      <div class="ai-metric__label">PostgreSQL</div>
       <div class="ai-metric__value">
-        {% if status.overall == 'ok' %}
-          <span class="ai-status ai-status--ok">ok</span>
-        {% else %}
-          <span class="ai-status ai-status--warning">degraded</span>
-        {% endif %}
-      </div>
-    </div>
-    <div class="ai-metric">
-      <div class="ai-metric__label">База данных</div>
-      <div class="ai-metric__value">
-        {% set db = status.components.database %}
-        {% if db.status == 'ok' %}
-          <span class="ai-status ai-status--ok">ok</span>
-        {% else %}
-          <span class="ai-status ai-status--error">error</span>
-        {% endif %}
+        {% if db.status == 'ok' %}<span class="ai-status ai-status--ok">ok</span>{% else %}<span class="ai-status ai-status--error">error</span>{% endif %}
       </div>
       <div class="ai-metric__note">{{ db.latency_ms }} мс{% if db.detail %} · {{ db.detail }}{% endif %}</div>
     </div>
     <div class="ai-metric">
       <div class="ai-metric__label">Воркер</div>
       <div class="ai-metric__value">
-        {% if not status.worker.available %}
+        {% if not w.available %}
           <span class="ai-status ai-status--muted">нет данных</span>
-        {% elif status.worker.worker_alive %}
+        {% elif w.worker_alive %}
           <span class="ai-status ai-status--ok">alive</span>
         {% else %}
           <span class="ai-status ai-status--warning">не отвечает</span>
         {% endif %}
       </div>
-      <div class="ai-metric__note">
-        {% if status.worker.available %}
-          обновлён {{ status.worker.age_seconds }}с назад · провайдер: {{ status.worker.current_provider or '—' }}
+      <div class="ai-metric__note">{% if w.available %}обновлён {{ w.age_seconds }}с назад{% else %}status.json отсутствует{% endif %}</div>
+    </div>
+    <div class="ai-metric">
+      <div class="ai-metric__label">LLM-провайдер</div>
+      <div class="ai-metric__value">
+        {% if not w.available %}
+          <span class="ai-status ai-status--muted">нет данных</span>
+        {% elif active_prov and provs.get(active_prov) %}
+          <span class="ai-status ai-status--ok">{{ active_prov }}</span>
+        {% elif active_prov %}
+          <span class="ai-status ai-status--warning">{{ active_prov }} · нет ключа</span>
         {% else %}
-          status.json отсутствует — воркер ещё не писал или не запущен
+          <span class="ai-status ai-status--muted">—</span>
         {% endif %}
       </div>
+      <div class="ai-metric__note">активный · применяется в runtime</div>
+    </div>
+    <div class="ai-metric">
+      <div class="ai-metric__label">Telegram-бот</div>
+      <div class="ai-metric__value">
+        {% if w.available and w.telegram %}
+          <span class="ai-status ai-status--ok">настроен</span>
+        {% elif w.available %}
+          <span class="ai-status ai-status--muted">выключен</span>
+        {% else %}
+          <span class="ai-status ai-status--muted">нет данных</span>
+        {% endif %}
+      </div>
+      <div class="ai-metric__note">уведомления оператору</div>
+    </div>
+    <div class="ai-metric">
+      <div class="ai-metric__label">API (сайт)</div>
+      <div class="ai-metric__value"><span class="ai-status ai-status--ok">ok</span></div>
+      <div class="ai-metric__note">/health · /admin отвечают</div>
     </div>
   </div>
 
-  {# Метрики #}
+  {# Ряд 2 — 5 метрик #}
   <div class="ai-grid ai-grid--5" style="margin-bottom:12px;">
     <div class="ai-metric"><div class="ai-metric__label">Отзывы new</div><div class="ai-metric__value">{{ status.db_metrics.reviews.new }}</div></div>
     <div class="ai-metric"><div class="ai-metric__label">Отзывы processed</div><div class="ai-metric__value">{{ status.db_metrics.reviews.processed }}</div></div>
@@ -64,54 +89,24 @@
     <div class="ai-metric"><div class="ai-metric__label">Аудит-записи</div><div class="ai-metric__value">{{ status.db_metrics.audit_count }}</div></div>
   </div>
 
-  {# Провайдеры + последний запуск #}
-  <div class="ai-grid ai-grid--2">
-    <div>
-      <div class="ai-metric__label" style="margin-bottom:6px;">Провайдеры (сконфигурированы)</div>
-      <div class="ai-chips">
-        {% set provs = status.worker.providers if status.worker.available else {} %}
-        <span class="ai-chip {% if provs.get('openai') %}ok{% else %}skipped{% endif %}">OpenAI: {% if provs.get('openai') %}да{% else %}нет{% endif %}</span>
-        <span class="ai-chip {% if provs.get('gigachat') %}ok{% else %}skipped{% endif %}">GigaChat: {% if provs.get('gigachat') %}да{% else %}нет{% endif %}</span>
-        <span class="ai-chip {% if provs.get('yandex') %}ok{% else %}skipped{% endif %}">Yandex: {% if provs.get('yandex') %}да{% else %}нет{% endif %}</span>
-      </div>
-      <div class="ai-metric__label" style="margin:10px 0 4px;">Текущий применённый конфиг</div>
-      <dl class="ai-kv">
-        <dt>provider</dt><dd>{{ status.current_config.provider or '—' }}</dd>
-        <dt>model</dt><dd>{{ status.current_config.model or '—' }}</dd>
-        <dt>base_url</dt><dd>{{ status.current_config.base_url or '—' }}</dd>
-        <dt>prompt</dt><dd>{{ status.current_config.prompt.size }} байт{% if status.current_config.prompt.mtime %} · {{ status.current_config.prompt.mtime[:19] }}{% endif %}</dd>
-      </dl>
-    </div>
-    <div>
-      <div class="ai-metric__label" style="margin-bottom:6px;">Последняя сессия обработки</div>
-      {% if status.db_metrics.last_session %}
-        <dl class="ai-kv">
-          <dt>сессия</dt><dd>#{{ status.db_metrics.last_session.id }} · <span class="ai-chip {{ status.db_metrics.last_session.status }}">{{ status.db_metrics.last_session.status }}</span></dd>
-          <dt>провайдер / модель</dt><dd>{{ status.db_metrics.last_session.provider_key or '—' }} / {{ status.db_metrics.last_session.model_name or '—' }}</dd>
-          <dt>длительность</dt><dd>{{ status.db_metrics.last_session.duration_ms if status.db_metrics.last_session.duration_ms is not none else '—' }} мс</dd>
-          <dt>финал</dt><dd class="muted">{{ status.db_metrics.last_session.finished_at[:19] if status.db_metrics.last_session.finished_at else '—' }}</dd>
-        </dl>
-      {% else %}
-        <div class="ai-empty">Сессий обработки пока нет.</div>
-      {% endif %}
-
-      {% if status.db_metrics.recent_errors %}
-      <div class="ai-metric__label" style="margin:10px 0 4px;">Последние ошибки</div>
-      <table class="ai-table">
-        <thead><tr><th>ID</th><th>Отзыв</th><th>Ошибка</th></tr></thead>
-        <tbody>
-        {% for e in status.db_metrics.recent_errors %}
-          <tr>
-            <td class="id"><a href="/admin/executions/{{ e.id }}">#{{ e.id }}</a></td>
-            <td class="id">{{ e.review_id or '—' }}</td>
-            <td class="muted">{{ e.error or '—' }}</td>
-          </tr>
-        {% endfor %}
-        </tbody>
-      </table>
-      {% endif %}
-    </div>
+  {# Последние ошибки (health-сигнал) #}
+  {% if status.db_metrics.recent_errors %}
+  <div>
+    <div class="ai-metric__label" style="margin-bottom:6px;">Последние ошибки трейсов</div>
+    <table class="ai-table">
+      <thead><tr><th>ID</th><th>Отзыв</th><th>Ошибка</th></tr></thead>
+      <tbody>
+      {% for e in status.db_metrics.recent_errors %}
+        <tr>
+          <td class="id"><a href="/admin/executions/{{ e.id }}">#{{ e.id }}</a></td>
+          <td class="id">{{ e.review_id or '—' }}</td>
+          <td class="muted">{{ e.error or '—' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
   </div>
+  {% endif %}
 </section>
 
 {# ── Алерты ─────────────────────────────────────────────────────────────── #}
@@ -121,47 +116,72 @@
   <div class="ai-alert ai-alert--ok">✓ Конфигурация сохранена. Обработчик применит её на следующем цикле опроса без рестарта.</div>
 {% endif %}
 
-{# ── Форма конфигурации ─────────────────────────────────────────────────── #}
+{# ── Настройки обработчика ──────────────────────────────────────────────── #}
 <section class="ai-card">
-  <h2 class="ai-card__title">Настройки обработчика</h2>
-  <p class="ai-card__hint">Секреты (ключи провайдеров) хранятся в <code>.env</code> обработчика, не здесь. Смена применяется в runtime — без рестарта.</p>
+  <div class="ai-card__head">
+    <h2 class="ai-card__title">Настройки обработчика</h2>
+  </div>
+  <p class="ai-card__hint">Слева — карточки провайдеров (выбор активного), справа — системный промпт (файл-SOT). Секреты (ключи) хранятся в <code>.env</code> обработчика, не здесь. Смена применяется в runtime — без рестарта.</p>
 
   <form class="ai-form" method="post" action="/admin">
-    <div class="ai-row">
-      <div class="ai-field">
-        <label for="provider">Провайдер</label>
-        <select id="provider" name="provider" {{ 'disabled' if is_demo }}>
-          <option value="openai"   {{ 'selected' if config.provider == 'openai' }}>OpenAI</option>
-          <option value="gigachat" {{ 'selected' if config.provider == 'gigachat' }}>GigaChat (Сбер)</option>
-          <option value="yandex"   {{ 'selected' if config.provider == 'yandex' }}>YandexGPT</option>
-          <option value="custom"   {{ 'selected' if config.provider == 'custom' }}>Свой (OpenAI-compatible)</option>
-        </select>
-        <span class="desc">Активный LLM-провайдер.</span>
-      </div>
-      <div class="ai-field">
-        <label for="openai_model">Модель</label>
-        <input class="ai-input" id="openai_model" name="openai_model" value="{{ config.openai_model }}" {{ 'disabled' if is_demo }}>
-        <span class="desc">Для Yandex: <code>gpt://&lt;folder_id&gt;/yandexgpt/latest</code></span>
-      </div>
-    </div>
+    <div class="ai-cfg-grid">
+      {# Левая половина — провайдеры #}
+      <div class="ai-providers-col">
 
-    <div class="ai-row">
-      <div class="ai-field">
-        <label for="openai_base_url">Base URL (для «Свой» / OpenAI)</label>
-        <input class="ai-input" id="openai_base_url" name="openai_base_url" value="{{ config.openai_base_url }}" {{ 'disabled' if is_demo }}>
-        <span class="desc">Для GigaChat/Yandex игнорируется (пресет в коде).</span>
-      </div>
-      <div class="ai-field">
-        <label for="yandex_folder_id">Yandex folder_id</label>
-        <input class="ai-input" id="yandex_folder_id" name="yandex_folder_id" value="{{ config.yandex_folder_id }}" {{ 'disabled' if is_demo }}>
-        <span class="desc">Не секрет — каталог Yandex Cloud. Пусто для не-Yandex.</span>
-      </div>
-    </div>
+        {# OpenAI #}
+        <div class="ai-provider-card {% if config.provider == 'openai' %}ai-provider-card--active{% endif %}">
+          <div class="ai-provider-card__header">
+            <span class="ai-provider-card__name">OpenAI</span>
+            <div class="ai-provider-card__badges">
+              {% if config.provider == 'openai' %}<span class="ai-chip ok">активен</span>{% endif %}
+              <span class="ai-chip {% if provs.get('openai') %}ok{% else %}skipped{% endif %}">{% if provs.get('openai') %}ключ настроен{% else %}ключ отсутствует{% endif %}</span>
+            </div>
+          </div>
+          <div class="ai-provider-card__row">
+            <label for="openai_model">Модель</label>
+            <input class="ai-input" id="openai_model" name="openai_model" value="{{ config.openai_model }}" {{ 'disabled' if is_demo }}>
+          </div>
+          <div class="ai-provider-card__row">
+            <label for="openai_base_url">Base URL</label>
+            <input class="ai-input" id="openai_base_url" name="openai_base_url" value="{{ config.openai_base_url }}" {{ 'disabled' if is_demo }}>
+          </div>
+          <label class="ai-provider-card__active">
+            <input type="radio" name="provider" value="openai" {{ 'checked' if config.provider != 'gigachat' }} {{ 'disabled' if is_demo }}>
+            Сделать активным
+          </label>
+        </div>
 
-    <div class="ai-field">
-      <label for="system_prompt">Системный промпт (файл-SOT)</label>
-      <textarea class="ai-textarea" id="system_prompt" name="system_prompt" {{ 'disabled' if is_demo }} placeholder="Текст системного промпта обработчика">{{ prompt_text }}</textarea>
-      <span class="desc">Файл — единственный SOT промпта. Сохранение перезаписывает <code>system_prompt.md</code> на shared volume; обработчик применит новый промпт на следующем цикле (hot-reload по mtime).</span>
+        {# GigaChat #}
+        <div class="ai-provider-card {% if config.provider == 'gigachat' %}ai-provider-card--active{% endif %}">
+          <div class="ai-provider-card__header">
+            <span class="ai-provider-card__name">GigaChat (Сбер)</span>
+            <div class="ai-provider-card__badges">
+              {% if config.provider == 'gigachat' %}<span class="ai-chip ok">активен</span>{% endif %}
+              <span class="ai-chip {% if provs.get('gigachat') %}ok{% else %}skipped{% endif %}">{% if provs.get('gigachat') %}ключ настроен{% else %}ключ отсутствует{% endif %}</span>
+            </div>
+          </div>
+          <div class="ai-provider-card__row">
+            <label for="gigachat_model">Модель</label>
+            <input class="ai-input" id="gigachat_model" name="gigachat_model" value="{{ config.gigachat_model }}" {{ 'disabled' if is_demo }}>
+          </div>
+          <label class="ai-provider-card__active">
+            <input type="radio" name="provider" value="gigachat" {{ 'checked' if config.provider == 'gigachat' }} {{ 'disabled' if is_demo }}>
+            Сделать активным
+          </label>
+        </div>
+
+      </div>
+
+      {# Правая половина — системный промпт #}
+      <div class="ai-prompt-col">
+        <div class="ai-provider-card__row">
+          <label for="system_prompt">Системный промпт (файл-SOT)</label>
+          <textarea class="ai-textarea" id="system_prompt" name="system_prompt" {{ 'disabled' if is_demo }} placeholder="Текст системного промпта обработчика">{{ prompt_text }}</textarea>
+        </div>
+        <div class="ai-prompt-meta">
+          Файл-SOT <code>system_prompt.md</code> · {{ prompt_info.size }} байт{% if prompt_info.mtime %} · {{ prompt_info.mtime[:19] }}{% endif %}. Сохранение перезаписывает файл на shared volume; обработчик применит новый промпт на следующем цикле (hot-reload по mtime).
+        </div>
+      </div>
     </div>
 
     <div class="ai-actions">

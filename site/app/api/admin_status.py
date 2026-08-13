@@ -1,6 +1,6 @@
 """Консоль состояния системы — read-only обзор здоровья для /admin.
 
-Модель как в AI Curator `/admin/status`: `overall` + `components` (живые пробы с
+Модель данных: `overall` + `components` (живые пробы с
 latency) + метрики БД + текущий применённый конфиг + liveness воркера + статус
 провайдеров + последние ошибки.
 
@@ -177,9 +177,9 @@ async def build_system_status(db: AsyncSession) -> dict[str, Any]:
     config = read_runtime_config()
     current_config = {
         "provider": config.get("provider"),
-        "model": config.get("openai_model"),
-        "base_url": config.get("openai_base_url"),
-        "yandex_folder_id": config.get("yandex_folder_id"),
+        "openai_model": config.get("openai_model"),
+        "openai_base_url": config.get("openai_base_url"),
+        "gigachat_model": config.get("gigachat_model"),
         "prompt": prompt_info(),
     }
 

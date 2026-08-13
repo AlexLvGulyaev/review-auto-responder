@@ -52,7 +52,7 @@ DEFAULT_RUNTIME_CONFIG: dict[str, Any] = {
     "provider": "openai",
     "openai_model": "gpt-4.1-mini",
     "openai_base_url": "https://api.openai.com/v1",
-    "yandex_folder_id": "",
+    "gigachat_model": "GigaChat-Max",
 }
 
 
@@ -293,7 +293,7 @@ async def admin_save(
     provider: str = Form(...),
     openai_model: str = Form(...),
     openai_base_url: str = Form(...),
-    yandex_folder_id: str = Form(""),
+    gigachat_model: str = Form(...),
     system_prompt: str = Form(""),
     db: AsyncSession = Depends(get_db_session),
 ):
@@ -302,7 +302,7 @@ async def admin_save(
         "provider": provider,
         "openai_model": openai_model,
         "openai_base_url": openai_base_url,
-        "yandex_folder_id": yandex_folder_id.strip(),
+        "gigachat_model": gigachat_model.strip(),
     }
     write_runtime_config(payload)
     changed_keys = sorted(k for k in payload if previous.get(k) != payload[k])
@@ -324,20 +324,21 @@ async def admin_save(
         ip_address=client_ip(request),
         details={
             "provider": payload["provider"],
-            "model": payload["openai_model"],
-            "base_url": payload["openai_base_url"],
-            "yandex_folder_id": payload["yandex_folder_id"],
+            "openai_model": payload["openai_model"],
+            "openai_base_url": payload["openai_base_url"],
+            "gigachat_model": payload["gigachat_model"],
             "prompt_len": len(new_prompt),
             "prompt_changed": prompt_changed,
             "changed_keys": changed_keys,
         },
     )
+    active_model = payload["openai_model"] if payload["provider"] == "openai" else payload["gigachat_model"]
     logger.info(
         "Runtime config updated by user_id=%s role=%s: provider=%s model=%s prompt_changed=%s",
         admin.user_id,
         admin.user_role,
         payload["provider"],
-        payload["openai_model"],
+        active_model,
         prompt_changed,
     )
     return RedirectResponse(url="/admin?saved=1", status_code=status.HTTP_303_SEE_OTHER)

@@ -79,12 +79,12 @@ flowchart TD
 | HTTP-клиент | `client.py` | `check_site`, `fetch_new_reviews` (через `?status=new`), `create_review`, `update_review`, `start_execution`, `finish_execution` |
 | Классификатор | `processor.py` | `detect_tone` (словарь маркеров), `build_fallback_response`, `generate_response` → `(text, meta)` где `meta={provider, model, latency_ms, tokens, fallback_reason}` |
 | Провайдеры | `providers/base.py` | `ResponseProvider` ABC: `async generate(system, user) -> str`, `name`/`model_name`/`last_usage` для observability |
-| OpenAI-совместимый | `providers/openai_provider.py` | OpenAI SDK Chat Completions; работает для openai/yandex/custom (base_url + default_headers для yandex `x-folder-id`) |
+| OpenAI-совместимый | `providers/openai_provider.py` | OpenAI SDK Chat Completions; `base_url` из runtime-config (любой OpenAI-compatible endpoint) |
 | GigaChat | `providers/gigachat_provider.py` | OAuth-адаптер, async-обёртка через `asyncio.to_thread` |
-| Фабрика | `providers/factory.py` | Выбор провайдера по `runtime.get("provider")` (не env) |
+| Фабрика | `providers/factory.py` | Выбор провайдера по `runtime.get("provider")` (openai/gigachat, не env) |
 | Runtime-config | `runtime_config.py` | mtime-кеш `config.json` из shared volume + `threading.Lock`; `get(key)` |
-| Промпт | `prompt_loader.py` | Загрузка `prompts/v1/system.md`; override из `runtime.get("system_prompt_override")` |
-| Промпт-файл | `prompts/v1/system.md` | Системный промпт генерации ответа (единый SOT текста; override через `/admin`) |
+| Промпт | `prompt_loader.py` | Чтение `system_prompt.md` из shared volume (файл-SOT, mtime-кеш); fallback на вшитый `prompts/v1/system.md` |
+| Промпт-файл | `prompts/v1/system.md` | Начальный default для bootstrap (копируется в shared volume при первом запуске) |
 | Состояние | `state.py` | `state.json`: `notified_review_ids`, `processed_review_ids` |
 | Telegram | `telegram_bot.py` | `send_new_review_notification` (опционально) |
 | Модели | `models.py` | `RemoteReview`, `ReviewCreatePayload`, `ReviewUpdatePayload`, `ReviewStatus`, `ReviewTone` |
@@ -174,13 +174,14 @@ flowchart TD
 
 | Поле | Тип | Описание |
 |------|-----|----------|
-| `provider` | `str` | Активный провайдер: `openai`/`gigachat`/`yandex`/`custom` |
-| `openai_model` | `str` | Модель (для yandex — `gpt://<folder_id>/yandexgpt/latest`) |
-| `openai_base_url` | `str` | base_url (для custom; для openai/yandex — пресет) |
-| `yandex_folder_id` | `str` | folder_id Yandex (runtime-параметр, не секрет) |
-| `system_prompt_override` | `str` \| null | Override промпта; null → используется `prompts/v1/system.md` |
+| `provider` | `str` | Активный провайдер: `openai`/`gigachat` |
+| `openai_model` | `str` | Модель OpenAI |
+| `openai_base_url` | `str` | base_url OpenAI / OpenAI-compatible endpoint |
+| `gigachat_model` | `str` | Модель GigaChat |
 
-**Секреты (`OPENAI_API_KEY`, `GIGACHAT_AUTH_KEY`, `YANDEX_API_KEY`) в `config.json` НЕ хранятся** — только в `.env` обработчика. `/admin` редактирует runtime-параметры, не ключи.
+Промпт хранится отдельно — файл `system_prompt.md` на том же shared volume (файл-SOT), не поле `config.json`.
+
+**Секреты (`OPENAI_API_KEY`, `GIGACHAT_AUTH_KEY`) в `config.json` НЕ хранятся** — только в `.env` обработчика. `/admin` редактирует runtime-параметры, не ключи.
 
 > 📌 Таблицы observability создаются `Base.metadata.create_all` в lifespan сайта (без Alembic) — idempotent для существующей БД.
 
@@ -195,10 +196,9 @@ flowchart TD
 | `/admin` → обработчик | Сайт пишет `config.json` в shared volume; обработчик читает по mtime (hot-reload, без рестарта) | `docs/ARCHITECTURE.md` + код `runtime_config.py` |
 | OpenAI | Chat Completions (`/v1/chat/completions`), `Authorization: Bearer` | `docs/EXTERNAL_PROVIDERS.md` |
 | GigaChat | OAuth-обмен auth_key→access_token (`/oauth`), `/chat/completions`, сертификат Минцифры | адаптер `gigachat_provider.py` (SOT — код + доки GigaChat) |
-| YandexGPT | `/chat/completions`, Bearer + `x-folder-id`, модель `gpt://<folder_id>/yandexgpt/latest` | `docs/EXTERNAL_PROVIDERS.md` |
 | Telegram Bot API | `POST /bot<token>/sendMessage` | код `telegram_bot.py` + доки Telegram |
 
-**Унификация вызова:** legacy использовал OpenAI `responses.create`. Доработка переводит все провайдеры на Chat Completions — общий знаменатель (GigaChat/Yandex — OpenAI-compatible Chat Completions; OpenAI поддерживает оба). Это сознательная, документированная дивергенция от legacy ради единой абстракции.
+**Унификация вызова:** legacy использовал OpenAI `responses.create`. Доработка переводит все провайдеры на Chat Completions — общий знаменатель (GigaChat — OpenAI-compatible Chat Completions; OpenAI поддерживает оба). Это сознательная, документированная дивергенция от legacy ради единой абстракции.
 
 ---
 
@@ -228,10 +228,10 @@ flowchart TD
 - [x] `GET /health` сайта → 200; healthcheck обработчика (heartbeat) → healthy.
 - [x] `GET /api/reviews?status=new` отдаёт только новые отзывы.
 - [x] Три отзыва (позитивный/негативный/нейтральный): тон определён, ответ сгенерирован, статус `processed`.
-- [x] `provider` (через `/admin`) = openai/gigachat/yandex — ответ генерируется через выбранный провайдер; при сбое/нет ключа — fallback.
+- [x] `provider` (через `/admin`) = openai/gigachat — ответ генерируется через выбранный провайдер; при сбое/нет ключа — fallback.
 - [x] `/admin` меняет провайдер/модель/промпт в runtime — применяется на следующем цикле опроса без рестарта обработчика.
 - [x] Демо-RBAC: `ADMIN_DEMO_TOKEN` → чтение `/admin` разрешено, POST `/admin` → 403 (backend guard); `ADMIN_TOKEN` → мутации разрешены.
-- [x] Промпт читается из `prompts/v1/system.md` (правка файла влияет на ответ без правки кода); override через `/admin`.
+- [x] Промпт — файл-SOT на shared volume (`system_prompt.md`, bootstrap из вшитого `prompts/v1/system.md`); правка через `/admin` перезаписывает файл и влияет на ответ без правки кода.
 - [x] Секреты (ключи API) только в `.env`; `config.json` содержит только runtime-параметры.
 - [x] Self-reply предотвращён (обработчик не отвечает на собственные ответы).
 - [x] Telegram-уведомление при настроенном токене; пропуск без него.

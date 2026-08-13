@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     # --- идентичность AI-ответов ---
     ai_author_name: str = "AI Support"
 
-    # --- OpenAI / OpenAI-compatible / custom ---
+    # --- OpenAI / OpenAI-compatible ---
     openai_api_key: str = ""
 
     # --- GigaChat (Сбер) ---
@@ -42,9 +42,6 @@ class Settings(BaseSettings):
     gigachat_token_url: str = "https://ngw.devices.sberbank.ru:9443/api/v2/oauth"
     gigachat_scope: str = "GIGACHAT_API_PERS"
     gigachat_ca_bundle: str = ""
-
-    # --- YandexGPT ---
-    yandex_api_key: str = ""
 
     # --- Telegram ---
     telegram_bot_token: str = ""

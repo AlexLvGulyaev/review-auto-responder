@@ -25,7 +25,7 @@
 | Сайт | FastAPI + SQLAlchemy 2.x async + asyncpg + Jinja2 |
 | БД | PostgreSQL 16 |
 | Обработчик | Python 3.12, asyncio, httpx |
-| LLM | OpenAI / GigaChat / YandexGPT / «Свой» (Chat Completions) + словарный fallback |
+| LLM | OpenAI / GigaChat (Chat Completions) + словарный fallback |
 | Классификатор тона | Словарь маркеров (без LLM) |
 | Уведомления | Telegram Bot API (sendMessage) |
 | Состояние | Локальный JSON (`state.json`) |
@@ -53,8 +53,8 @@
 
 ### 🟡 Средний приоритет
 
-- [x] **Мультипровайдерность** — legacy захардкожен на OpenAI `responses.create`; реализован единый адаптер Chat Completions (OpenAI/GigaChat/YandexGPT/«Свой»).
-- [x] **Промпт в файле** — legacy-промпт захардкожен в `processor.py`; вынесен в `prompts/v1/system.md` (mtime-кеш runtime-config).
+- [x] **Мультипровайдерность** — legacy захардкожен на OpenAI `responses.create`; реализован единый адаптер Chat Completions (OpenAI/GigaChat).
+- [x] **Промпт в файле** — legacy-промпт захардкоден в `processor.py`; вынесен в `system_prompt.md` на shared volume (файл-SOT, mtime-кеш).
 - [x] **Единый docker-compose** — единый compose (site + db + worker) с общим `WORKER_API_TOKEN`.
 - [x] **`/health` эндпоинты** — добавлены на сайте и у обработчика (heartbeat) для Deployment Validation.
 
@@ -87,7 +87,7 @@
 | Риск | Вероятность | Влияние | Митигация |
 |------|-------------|--------|------------|
 | Захардкожен один провайдер (legacy) | — | — | ✅ Митигировано: мультипровайдерность (единый адаптер Chat Completions) |
-| Промпт в коде — сложно варьировать (legacy) | — | — | ✅ Митигировано: `prompts/v1/system.md` + override через `/admin` |
+| Промпт в коде — сложно варьировать (legacy) | — | — | ✅ Митигировано: `system_prompt.md` (файл-SOT) + правка через `/admin` |
 | Два отдельных compose (legacy) — сложно воспроизвести | — | — | ✅ Митигировано: единый compose + DEPLOYMENT_GUIDE |
 | Нет `/health` (legacy) — Deployment Validation затруднена | — | — | ✅ Митигировано: health-эндпоинты добавлены |
 | Auth-асимметрия — открытые POST/чтение | Средняя | Среднее | Документировано; RBAC на публичную запись отложен в v1.0 |
@@ -104,7 +104,7 @@
 | FastAPI + PostgreSQL | SQLAlchemy 2.x async, asyncpg, самоссылка parent_id | ✅ |
 | Async-поллер | asyncio + httpx, интервал опроса, ожидание сайта | ✅ |
 | Классификация тона | Словарь маркеров (без LLM) | ✅ |
-| LLM-генерация ответа | Chat Completions: OpenAI/GigaChat/YandexGPT + fallback | ✅ Мультипровайдерность |
+| LLM-генерация ответа | Chat Completions: OpenAI/GigaChat + fallback | ✅ Мультипровайдерность |
 | Идемпотентность | Локальный `state.json` (notified/processed) + статус на сайте | ✅ |
 | Telegram-уведомления | Bot API sendMessage | ✅ |
 | Защита от self-reply | Проверка `is_ai_authored` по имени + mark-processed | ✅ |
@@ -121,9 +121,9 @@
 **Реализованные решения:**
 
 - База — legacy-архитектура (сайт + обработчик), доработка по направлениям §2.
-- Мультипровайдерность: OpenAI / GigaChat (OAuth-адаптер) / YandexGPT — единый адаптер Chat Completions. Смена провайдера через web-`/admin` в runtime, без рестарта.
-- Web-`/admin` на сайте (портфолио-стиль): provider, model, base_url, yandex_folder_id, system_prompt_override → `config.json` в shared volume; обработчик hot-reload'ит по mtime. Секреты остаются в `.env`.
-- Промпт вынесен из `processor.py` в `prompts/v1/system.md`; override через `/admin`.
+- Мультипровайдерность: OpenAI / GigaChat (OAuth-адаптер) — единый адаптер Chat Completions. Смена провайдера через web-`/admin` в runtime, без рестарта (карточки провайдеров, radio «сделать активным»).
+- Web-`/admin` на сайте (домстиль AIP Dark, sidebar, 4 консоли): `provider`, `openai_model`, `openai_base_url`, `gigachat_model` → `config.json` в shared volume; обработчик hot-reload'ит по mtime. Секреты остаются в `.env`.
+- Промпт вынесен из `processor.py` в `system_prompt.md` на shared volume (файл-SOT); правка через `/admin` перезаписывает файл.
 - Единый `docker-compose.yml` (site + db + worker) с общим `WORKER_API_TOKEN` + `/health` — для воспроизводимого Deployment Validation.
 - Архитектура пути данных зафиксирована в `docs/ARCHITECTURE.md` (sequence-схема).
 - Три контура observability: stdout-логирование (`LOG_LEVEL`), execution-tracing (`/admin/executions`), аудит (`/admin/audit`).
@@ -157,7 +157,7 @@
 | Зависимость | Описание | Влияние |
 |-------------|----------|---------|
 | Тестовый сайт отзывов | Цель опроса; источник новых отзывов, приёмник ответов | Блокирует весь поток |
-| LLM-провайдер | Генерация ответа (OpenAI/GigaChat/YandexGPT) | Fallback на словарные шаблоны при сбое/отсутствии ключа |
+| LLM-провайдер | Генерация ответа (OpenAI/GigaChat) | Fallback на словарные шаблоны при сбое/отсутствии ключа |
 | Telegram Bot API | Уведомления оператора | Опционально; без токена — пропуск |
 | PostgreSQL | Хранилище отзывов сайта + таблицы observability | Блокирует сайт |
 | VPS / Docker Host | Развёртывание 24/7 | Блокирует публичный деплой |
@@ -177,6 +177,8 @@
 | 2026-08-13 | Портфельный актив | Публичный репозиторий опубликован (github.com/AlexLvGulyaev/review-auto-responder); public-boundary соблюдён |
 | 2026-08-13 | Публичное демо | Живое демо развёрнуто за Traefik (TLS) на https://review-auto-responder.alex-n8n.site: router+service в dynamic.yml, review-site в сети прокси (override, gitignored), GigaChat верифицирован реальным ответом на публичном эндпоинте; DEPLOYMENT_GUIDE §8 дополнен production-разделом |
 | 2026-08-13 | Observability | Три контура: stdout-логирование (`LOG_LEVEL`, dictConfig, приглушённые httpx/openai), execution-tracing (`execution_sessions`+`execution_steps`, воркер пишет через API сайта, `/admin/executions` с LLM-метриками provider/model/latency_ms/tokens/fallback_reason), аудит (`audit_logs`, `/admin/audit`, события login/config/rbac/worker_denied). Верифицировано на живом демо (GigaChat: tokens=192, latency_ms=663); коммит `8e61c5e` в origin/main; public-boundary кода очищен |
+| 2026-08-13 | AIP Dark + file-SOT | Редизайн админки в домстиле AIP Dark (sidebar, 4 консоли); промпт — файл-SOT на shared volume (`system_prompt.md`, bootstrap из `prompts/v1/system.md`); консоль состояния системы `/admin/status` + `status.json` воркера в shared volume (liveness + bool-флаги провайдеров, без секретов) |
+| 2026-08-13 | Конфиг-консоль v1.3 | Двухколоночный лэйаут конфиг-консоли (карточки провайдеров OpenAI/GigaChat слева, промпт справа); ряд состояния системы — 5 плиток (PostgreSQL/Воркер/LLM/Telegram/API); per-provider модели (`gigachat_model`); Yandex-провайдер убран из кода и docs |
 
 ---
 

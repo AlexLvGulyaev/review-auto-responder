@@ -22,7 +22,7 @@ DEFAULTS: dict[str, Any] = {
     "provider": "openai",
     "openai_model": "gpt-4.1-mini",
     "openai_base_url": "https://api.openai.com/v1",
-    "yandex_folder_id": "",
+    "gigachat_model": "GigaChat-Max",
 }
 
 
@@ -54,7 +54,8 @@ class RuntimeConfig:
         merged.update(data)
         self._cache = merged
         self._mtime = stat.st_mtime
-        logger.info("Runtime config reloaded: provider=%s model=%s", merged["provider"], merged["openai_model"])
+        active_model = merged["gigachat_model"] if merged["provider"] == "gigachat" else merged["openai_model"]
+        logger.info("Runtime config reloaded: provider=%s model=%s", merged["provider"], active_model)
 
     def get(self, key: str, default: Any = None) -> Any:
         with self._lock:

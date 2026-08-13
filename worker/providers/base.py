@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 class ResponseProvider(ABC):
     """Единый интерфейс генерации ответа для всех LLM-провайдеров.
 
-    Унификация на Chat Completions (общий знаменатель OpenAI/GigaChat/Yandex).
+    Унификация на Chat Completions (общий знаменатель OpenAI/GigaChat).
     Legacy использовал OpenAI `responses.create` — доработка переводит все
     провайдеры на Chat Completions ради единой абстракции.
 
