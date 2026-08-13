@@ -2,6 +2,8 @@
 
 Автономный AI-ассистент, который 24/7 собирает новые отзывы с сайта, определяет их тональность, генерирует уместный ответ нейросетью и уведомляет оператора в Telegram. Демонстрация универсального паттерна **«парсер + автономная AI-обработка»** с переключаемым LLM-провайдером.
 
+> 🌐 **Живое демо:** <https://review-auto-responder.alex-n8n.site> — публичный сайт отзывов; ответы генерируются нейросетью (GigaChat). Операторская панель: <https://review-auto-responder.alex-n8n.site/admin>.
+
 > 📌 **Атрибуция:** идея и исходная архитектура взяты из учебных репозиториев преподавателя [`MrGAN12009/worker_ai`](https://github.com/MrGAN12009/worker_ai) (ассистент-обработчик) и [`MrGAN12009/app_test_2803`](https://github.com/MrGAN12009/app_test_2803) (тестовый сайт отзывов). Текущая версия переработана в единый двухсервисный проект с мультипровайдерностью (OpenAI/GigaChat/YandexGPT), операторской панелью `/admin` (смена провайдера/модели/промпта в runtime без рестарта), промптом в файле, демо-RBAC, `/health`, server-side фильтром и публичной документацией с Deployment Validation.
 
 ---
@@ -72,7 +74,6 @@ docker compose up -d --build
 ## 📚 6. Документация
 
 - [🏗️ `docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — архитектура и путь данных.
-- [📋 `docs/SPEC.md`](docs/SPEC.md) — продуктовая спецификация.
 - [📋 `docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) — технический план.
 - [🔌 `docs/API_CONTRACT.md`](docs/API_CONTRACT.md) — контракты HTTP API.
 - [🤖 `docs/EXTERNAL_PROVIDERS.md`](docs/EXTERNAL_PROVIDERS.md) — параметры LLM-провайдеров.

@@ -33,7 +33,7 @@
 
 ## 📊 2. Current Status
 
-**Стадия:** ✅ Портфельный актив. Доработка реализована (site + worker + единый compose + `/admin` runtime-config + демо-RBAC + мультипровайдерность + промпт-в-файле), Deployment Validation пройдена в чистом окружении (17/17 PASS), публичный репозиторий опубликован (github.com/AlexLvGulyaev/review-auto-responder), отчёт по ДЗ и сопроводительное письмо куратору подготовлены.
+**Стадия:** ✅ Портфельный актив (публичное демо). Доработка реализована (site + worker + единый compose + `/admin` runtime-config + демо-RBAC + мультипровайдерность + промпт-в-файле), Deployment Validation пройдена в чистом окружении (17/17 PASS), публичный репозиторий опубликован (github.com/AlexLvGulyaev/review-auto-responder), живое демо развёрнуто за обратным прокси (Traefik, TLS) по адресу https://review-auto-responder.alex-n8n.site (ответы генерируются через GigaChat), отчёт по ДЗ и сопроводительное письмо куратору подготовлены.
 
 ### ✅ Завершённые задачи
 
@@ -184,6 +184,7 @@
 | 2026-08-13 | Разработка | Реализованы review-site (FastAPI + PostgreSQL, `/admin` демо-RBAC) и review-worker (мультипровайдер, runtime-config, heartbeat); единый `docker-compose.yml`; APL-документация. Исправлены: `python-multipart`, баг серверного фильтра `?status` (alias) |
 | 2026-08-13 | Deployment Validation | Чистое окружение (teardown → пересборка по DEPLOYMENT_GUIDE): 17/17 PASS — 3 отзыва разной тональности, switch OpenAI↔GigaChat без рестарта (реальный ответ GigaChat), демо-RBAC 403/401, fallback, healthcheck-и |
 | 2026-08-13 | Портфельный актив | Публичный репозиторий опубликован (github.com/AlexLvGulyaev/review-auto-responder); public-boundary соблюдён; отчёт по ДЗ и письмо куратору подготовлены |
+| 2026-08-13 | Публичное демо | Живое демо развёрнуто за Traefik (TLS) на https://review-auto-responder.alex-n8n.site: router+service в dynamic.yml, review-site в сети прокси (override, gitignored), GigaChat верифицирован реальным ответом на публичном эндпоинте; DEPLOYMENT_GUIDE §8 дополнен production-разделом |
 
 ---
 

@@ -219,16 +219,90 @@ docker compose down -v
 
 ---
 
-## 🌐 8. Адаптация для production
+## 🌐 8. Публичное развёртывание (production)
 
-Документ описывает локальное/demo-развёртывание. Для production:
+Документ выше описывает локальное развёртывание на `localhost:8000`. Этот раздел —
+как опубликовать демо за обратным прокси с TLS, чтобы получить публичный эндпоинт
+вида `https://review-auto-responder.example.com`.
 
-- **TLS / публичный домен:** перед сайтом — обратный прокси (например, Traefik/Caddy) с терминированием TLS; `/admin` — только через HTTPS.
-- **Секреты:** не `change-me`; уникальные `WORKER_API_TOKEN`/`ADMIN_TOKEN`/`ADMIN_DEMO_TOKEN`.
-- **GigaChat TLS:** `GIGACHAT_CA_BUNDLE` (Russian Trusted Root CA) вместо `ssl.CERT_NONE`.
-- **Публичная форма:** рассмотреть токенизацию + квоту (паттерн `web-ui-tokenized-demo-limiter`) и RBAC на `POST /api/reviews` (отложено в v1.0).
+> 🌐 **Эталонное демо этого проекта** работает публично по адресу
+> <https://review-auto-responder.alex-n8n.site> (за обратным прокси Traefik,
+> ответы генерируются через GigaChat). Используйте его как референс того, что
+> описано ниже.
+
+### 🌐 8.1. Сеть обратного прокси
+
+Чтобы прокси мог маршрутизировать трафик к контейнеру сайта, контейнер
+`review-site` должен быть в одной Docker-сети с прокси. Создаётся VPS-only
+override-файл `docker-compose.override.yml` (он в `.gitignore`, в репозиторий
+не попадает — это операторская настройка конкретного хоста):
+
+```yaml
+# docker-compose.override.yml — публикует review-site за внешним прокси.
+services:
+  review-site:
+    container_name: review-site          # фиксированное имя для маршрутизации
+    networks:
+      - default                          # внутренняя сеть compose (воркер → сайт)
+      - traefik-net                      # сеть прокси
+
+networks:
+  traefik-net:
+    external: true                       # создаётся прокси-стеком, не здесь
+```
+
+Поднимите стек как обычно — `docker compose up -d --build`. Публикация порта
+на хост (`APP_PORT`) при этом не обязательна: прокси обращается к контейнеру
+напрямую по сети.
+
+### 🌐 8.2. Маршрут в Traefik (file-provider)
+
+Пример записи для file-provider Traefik (динамическая конфигурация, файл
+наподобие `/etc/traefik/dynamic.yml`). Имя сервиса `review-site` совпадает с
+`container_name` из override — прокси резолвит его через общую сеть:
+
+```yaml
+http:
+  routers:
+    review-auto-responder:
+      rule: "Host(`review-auto-responder.example.com`)"
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: myresolver          # ACME (Let's Encrypt) resolver
+      service: review-auto-responder
+      priority: 1
+
+  services:
+    review-auto-responder:
+      loadBalancer:
+        servers:
+          - url: "http://review-site:8000"
+```
+
+> ⚠️ Если у file-provider выключен `watch` (конфигурация не перечитывается
+> автоматически), после правки файла перезапустите Traefik:
+> `docker restart <traefik-container>`. При `watch=true` перезапуск не нужен.
+
+### 🌐 8.3. Проверка публичного эндпоинта
+
+```bash
+curl -i https://review-auto-responder.example.com/health    # → 200 {"status":"ok"}
+```
+
+Сайт отзывов и `/admin` обслуживаются на одном порту `8000` — отдельный
+`-admin` субдомен не требуется. `/admin` доступен как
+`https://review-auto-responder.example.com/admin` и защищён токенами
+(см. §5, демо-RBAC).
+
+### 🌐 8.4. Production-чеклист
+
+- **TLS / публичный домен:** обратный прокси терминирует TLS; `/admin` — только через HTTPS.
+- **Секреты:** уникальные `WORKER_API_TOKEN`/`ADMIN_TOKEN`/`ADMIN_DEMO_TOKEN` (не демо-значения).
+- **GigaChat TLS:** `GIGACHAT_CA_BUNDLE` (Russian Trusted Root CA) вместо `ssl.CERT_NONE` — на production не отключайте проверку сертификата.
+- **Публичная форма:** `POST /api/reviews` открыт по дизайну (демо). Для публичного инстанса рассмотрите токенизацию/квоту запросов и RBAC на запись (отложено в v1.0).
 - **БД:** резервное копирование `db-data` volume.
-- **Telegram:** заполнить `TELEGRAM_BOT_TOKEN` + `TELEGRAM_USER_CHAT_ID` для уведомлений оператору.
+- **Telegram:** заполните `TELEGRAM_BOT_TOKEN` + `TELEGRAM_USER_CHAT_ID` для уведомлений оператору.
 
 ---
 
