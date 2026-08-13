@@ -33,13 +33,14 @@
 
 ## 📊 2. Current Status
 
-**Стадия:** ✅ Портфельный актив (публичное демо). Доработка реализована (site + worker + единый compose + `/admin` runtime-config + демо-RBAC + мультипровайдерность + промпт-в-файле), Deployment Validation пройдена в чистом окружении (17/17 PASS), публичный репозиторий опубликован (github.com/AlexLvGulyaev/review-auto-responder), живое демо развёрнуто за обратным прокси (Traefik, TLS) по адресу https://review-auto-responder.alex-n8n.site (ответы генерируются через GigaChat), отчёт по ДЗ и сопроводительное письмо куратору подготовлены.
+**Стадия:** ✅ Портфельный актив (публичное демо). Доработка реализована (site + worker + единый compose + `/admin` runtime-config + демо-RBAC + мультипровайдерность + промпт-в-файле + три контура observability), Deployment Validation пройдена в чистом окружении (17/17 PASS), публичный репозиторий опубликован (github.com/AlexLvGulyaev/review-auto-responder), живое демо развёрнуто за обратным прокси (Traefik, TLS) по адресу https://review-auto-responder.alex-n8n.site (ответы генерируются через GigaChat), отчёт по ДЗ и сопроводительное письмо куратору подготовлены.
 
 ### ✅ Завершённые задачи
 
 - [x] Клонирование legacy-репозиториев преподавателя (`worker_ai`, `app_test_2803`) как референса (публичные репозитории github.com/MrGAN12009).
 - [x] Анализ as-built архитектуры: путь данных, файлы по этапам, взаимодействие `client.py`/`processor.py`/`worker.py`, роль `state.py`.
 - [x] Зафиксировано исходное задание во внутренней истории задач лаборатории.
+- [x] **Observability — три контура:** централизованное stdout-логирование (`LOG_LEVEL`), execution-tracing обработки отзыва (`/admin/executions`, LLM-метрики в трассах), аудит admin/security-событий (`/admin/audit`). Верифицировано на живом публичном демо.
 
 ### 🔴 Высокий приоритет
 
@@ -185,6 +186,7 @@
 | 2026-08-13 | Deployment Validation | Чистое окружение (teardown → пересборка по DEPLOYMENT_GUIDE): 17/17 PASS — 3 отзыва разной тональности, switch OpenAI↔GigaChat без рестарта (реальный ответ GigaChat), демо-RBAC 403/401, fallback, healthcheck-и |
 | 2026-08-13 | Портфельный актив | Публичный репозиторий опубликован (github.com/AlexLvGulyaev/review-auto-responder); public-boundary соблюдён; отчёт по ДЗ и письмо куратору подготовлены |
 | 2026-08-13 | Публичное демо | Живое демо развёрнуто за Traefik (TLS) на https://review-auto-responder.alex-n8n.site: router+service в dynamic.yml, review-site в сети прокси (override, gitignored), GigaChat верифицирован реальным ответом на публичном эндпоинте; DEPLOYMENT_GUIDE §8 дополнен production-разделом |
+| 2026-08-13 | Observability | Три контура: stdout-логирование (`LOG_LEVEL`, dictConfig, приглушённые httpx/openai), execution-tracing (`execution_sessions`+`execution_steps`, воркер пишет через API сайта, `/admin/executions` с LLM-метриками provider/model/latency_ms/tokens/fallback_reason), аудит (`audit_logs`, `/admin/audit`, события login/config/rbac/worker_denied). Верифицировано на живом демо (GigaChat: tokens=192, latency_ms=663); коммит `8e61c5e` в origin/main; public-boundary кода очищен |
 
 ---
 
