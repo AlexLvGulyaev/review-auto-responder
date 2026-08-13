@@ -23,6 +23,8 @@
 
 - **base_url:** `https://api.openai.com/v1` (редактируется в `/admin`, поле `openai_base_url`). Любой OpenAI-compatible endpoint указывается через `base_url`.
 - **Модель:** `gpt-4.1-mini` (редактируется в `/admin`, поле `openai_model`).
+- **Temperature:** `0.3` по умолчанию (редактируется в `/admin`, поле `openai_temperature`).
+- **Max tokens:** `1024` по умолчанию (редактируется в `/admin`, поле `openai_max_tokens`).
 - **Auth:** `OPENAI_API_KEY` (`.env`) → Bearer напрямую в `AsyncOpenAI(api_key=…, base_url=…)`.
 - **Реализация:** `worker/providers/openai_provider.py` — `OpenAICompatibleProvider`.
 
@@ -32,23 +34,26 @@
 
 ## 🤖 2. GigaChat (Сбер) — НЕ drop-in, требуется адаптер
 
-- **base_url:** `https://gigachat.devices.sberbank.ru/api/v1`.
+- **base_url:** `https://gigachat.devices.sberbank.ru/api/v1` (в `.env` воркера, read-only в карточке).
 - **Модель:** `GigaChat-Max` (редактируется в `/admin`, поле `gigachat_model`).
+- **Temperature:** `0.1` по умолчанию (редактируется в `/admin`, поле `gigachat_temperature`).
+- **Max tokens:** `500` по умолчанию (редактируется в `/admin`, поле `gigachat_max_tokens`).
 - **Auth:** **нельзя** использовать authorization key как статический `api_key`. Нужен обмен authorization key → access token: `POST https://ngw.devices.sberbank.ru:9443/api/v2/oauth`, `Authorization: Basic <auth_key>`, scope `GIGACHAT_API_PERS`; access token (~30 мин) — как `Bearer` в `/chat/completions`.
 - **Refresh скрыт:** адаптер `worker/providers/gigachat_adapter.py` запрашивает свежий token **перед каждым запросом** (`_get_access_token`), ручного обновления оператором не требуется.
 - **TLS:** сертификат Минцифры РФ. `GIGACHAT_CA_BUNDLE` — проверка; пусто — `ssl.CERT_NONE` (dev/демо; для prod — Russian Trusted Root CA bundle).
-- **Реализация:** `gigachat_adapter.py` (синхронный urllib) + `gigachat_provider.py` (async-обёртка через `asyncio.to_thread`). Прямые HTTP-запросы без внешних SDK.
+- **Реализация:** `gigachat_adapter.py` (синхронный urllib) + `gigachat_provider.py` (async-обёртка через `asyncio.to_thread`). Прямые HTTP-запросы без внешних SDK. `chat_completions(..., max_tokens=None)` добавляет `max_tokens` в payload, если задан.
 - **Секрет:** `GIGACHAT_AUTH_KEY` в `.env`.
 
 ### 🧪 Статус верификации
 
 - **GigaChat** — end-to-end верифицирован реальным authorization key: OAuth-обмен + `/chat/completions` → корректный ответ на отзыв. Без ключа — `ProviderNotConfigured` → fallback (не падение).
+- **«Проверить»** — real-тест через внутренний test-API воркера (`test_connection`, 1-токенный вызов) доступен в `/admin` для обоих провайдеров.
 
 ---
 
-## 🔌 3. Fallback (без провайдера / при сбое)
+## 🔌 3. Fallback (LLM-chain + словарные шаблоны)
 
-Если активный провайдер не настроен (`ProviderNotConfigured` — нет ключа), сбой API или пустой ответ — `processor.generate_response` переходит на `build_fallback_response`: словарные шаблоны по определённому тону (позитивный/негативный/нейтральный). Система продолжает отвечать даже без ключа.
+Цепочка fallback в `processor.generate_response`: **активный LLM → fallback LLM** (если включён через `*_enabled`, сконфигурирован и отличается от активного) **→ словарные шаблоны** (`build_fallback_response` по определённому тону: позитивный/негативный/нейтральный). `meta` фиксирует провайдера-победителя и `fallback_reason`. Система продолжает отвечать даже без ключей — dict-fallback не падает.
 
 ---
 

@@ -4,24 +4,44 @@
 {% block page_title %}Конфиг-консоль{% endblock %}
 {% block page_subtitle %}Настройки провайдеров, системный промпт (файл-SOT) и состояние системы{% endblock %}
 
+{% block page_actions %}
+  <button type="submit" form="cfgForm" class="ai-btn" {{ 'disabled' if is_demo }} title="{{ 'Демо-режим: только просмотр' if is_demo else 'Сохранить config.json + промпт' }}">Сохранить</button>
+  <a class="ai-btn ai-btn--secondary ai-btn--small" href="/admin">↻ Обновить</a>
+  <a class="ai-btn ai-btn--secondary ai-btn--small" href="/admin/status" target="_blank">JSON-статус</a>
+{% endblock %}
+
 {% block content %}
+
+{% set w = status.worker %}
+{% set provs = w.providers if w.available else {} %}
+{% set active_prov = w.current_provider if w.available else none %}
+{% set db = status.components.database %}
+
+{# ── Flash-сообщения ─────────────────────────────────────────────────────── #}
+{% if test_result %}
+  <div class="ai-flash ai-flash--{{ 'ok' if test_result.ok else 'err' }}">
+    {% if test_result.ok %}✓{% else %}✕{% endif %}
+    Проверка «{{ test_result.provider }}»: {{ test_result.message }}
+  </div>
+{% elif is_demo %}
+  <div class="ai-alert ai-alert--demo">Демо-режим. Просмотр разрешён, изменение конфигурации заблокировано на backend (POST /admin → 403).</div>
+{% elif saved %}
+  <div class="ai-alert ai-alert--ok">✓ Конфигурация сохранена. Обработчик применит её на следующем цикле опроса без рестарта.</div>
+{% endif %}
 
 {# ── Состояние системы (ридонли) ────────────────────────────────────────── #}
 <section class="ai-card">
-  <div class="ai-card__head">
-    <h2 class="ai-card__title">Состояние системы</h2>
+  <div class="ai-section__head">
+    <div>
+      <div class="ai-section__title">Состояние системы</div>
+      <div class="ai-section__subtitle">Живые пробы компонентов и метрики из БД. Read-only.</div>
+    </div>
     {% if status.overall == 'ok' %}
       <span class="ai-status ai-status--ok">overall · ok</span>
     {% else %}
       <span class="ai-status ai-status--warning">overall · degraded</span>
     {% endif %}
   </div>
-  <p class="ai-card__hint">Живые пробы компонентов и метрики из БД. Read-only.</p>
-
-  {% set db = status.components.database %}
-  {% set w = status.worker %}
-  {% set provs = w.providers if w.available else {} %}
-  {% set active_prov = w.current_provider if w.available else none %}
 
   {# Ряд 1 — 5 компонентов #}
   <div class="ai-grid ai-grid--5" style="margin-bottom:12px;">
@@ -109,90 +129,154 @@
   {% endif %}
 </section>
 
-{# ── Алерты ─────────────────────────────────────────────────────────────── #}
-{% if is_demo %}
-  <div class="ai-alert ai-alert--demo">Демо-режим. Просмотр разрешён, изменение конфигурации заблокировано на backend (POST /admin → 403).</div>
-{% elif saved %}
-  <div class="ai-alert ai-alert--ok">✓ Конфигурация сохранена. Обработчик применит её на следующем цикле опроса без рестарта.</div>
-{% endif %}
+{# ── Две панели конфига (side-by-side) ───────────────────────────────────── #}
+{% set openai_models = ['gpt-4.1-mini', 'gpt-4.1', 'gpt-4.1-nano', 'gpt-4o-mini', 'gpt-4o', 'o4-mini'] %}
+{% set gigachat_models = ['GigaChat-Max', 'GigaChat-Pro', 'GigaChat', 'GigaChat-2-Max', 'GigaChat-2-Pro', 'GigaChat-2'] %}
 
-{# ── Настройки обработчика ──────────────────────────────────────────────── #}
-<section class="ai-card">
-  <div class="ai-card__head">
-    <h2 class="ai-card__title">Настройки обработчика</h2>
-  </div>
-  <p class="ai-card__hint">Слева — карточки провайдеров (выбор активного), справа — системный промпт (файл-SOT). Секреты (ключи) хранятся в <code>.env</code> обработчика, не здесь. Смена применяется в runtime — без рестарта.</p>
+<form id="cfgForm" method="post" action="/admin">
+  <div class="ai-config-top">
 
-  <form class="ai-form" method="post" action="/admin">
-    <div class="ai-cfg-grid">
-      {# Левая половина — провайдеры #}
-      <div class="ai-providers-col">
+    {# Панель 1 — Настройки ЛЛМ и провайдера #}
+    <section class="ai-card">
+      <div class="ai-section__head">
+        <div>
+          <div class="ai-section__title">
+            Настройки ЛЛМ и провайдера
+            <span class="ai-tooltip">ⓘ<span class="ai-tooltip__text">Секреты (ключи API) хранятся в .env обработчика, не в config.json. Здесь — только runtime-параметры: активный/fallback провайдер, модель, Base URL, temperature, max tokens, включён. Смена применяется в runtime без рестарта.</span></span>
+          </div>
+          <div class="ai-section__subtitle">Активный / fallback провайдер и карточки.</div>
+        </div>
+      </div>
+
+      {# Селекторы активного / fallback #}
+      <div class="ai-provider-selects">
+        <div class="ai-provider-card__field">
+          <label for="active_provider">Активный провайдер</label>
+          <select class="ai-select" id="active_provider" name="active_provider" {{ 'disabled' if is_demo }}>
+            <option value="openai" {{ 'selected' if config.active_provider == 'openai' }}>OpenAI</option>
+            <option value="gigachat" {{ 'selected' if config.active_provider == 'gigachat' }}>GigaChat</option>
+          </select>
+        </div>
+        <div class="ai-provider-card__field">
+          <label for="fallback_provider">Fallback провайдер</label>
+          <select class="ai-select" id="fallback_provider" name="fallback_provider" {{ 'disabled' if is_demo }}>
+            <option value="gigachat" {{ 'selected' if config.fallback_provider == 'gigachat' }}>GigaChat</option>
+            <option value="openai" {{ 'selected' if config.fallback_provider == 'openai' }}>OpenAI</option>
+          </select>
+        </div>
+      </div>
+
+      {# Карточки провайдеров — слева направо #}
+      <div class="ai-provider-cards">
 
         {# OpenAI #}
-        <div class="ai-provider-card {% if config.provider == 'openai' %}ai-provider-card--active{% endif %}">
+        <div class="ai-provider-card {% if config.active_provider == 'openai' %}ai-provider-card--active{% endif %}">
           <div class="ai-provider-card__header">
             <span class="ai-provider-card__name">OpenAI</span>
             <div class="ai-provider-card__badges">
-              {% if config.provider == 'openai' %}<span class="ai-chip ok">активен</span>{% endif %}
-              <span class="ai-chip {% if provs.get('openai') %}ok{% else %}skipped{% endif %}">{% if provs.get('openai') %}ключ настроен{% else %}ключ отсутствует{% endif %}</span>
+              {% if config.active_provider == 'openai' %}<span class="ai-chip ok">АКТИВНЫЙ</span>{% elif config.fallback_provider == 'openai' %}<span class="ai-chip skipped">РЕЗЕРВ</span>{% endif %}
+              {% if provs.get('openai') %}<span class="ai-chip ok">ГОТОВ</span>{% else %}<span class="ai-chip error">НЕ ГОТОВ</span>{% endif %}
             </div>
           </div>
-          <div class="ai-provider-card__row">
-            <label for="openai_model">Модель</label>
-            <input class="ai-input" id="openai_model" name="openai_model" value="{{ config.openai_model }}" {{ 'disabled' if is_demo }}>
-          </div>
-          <div class="ai-provider-card__row">
+          <div class="ai-provider-card__field">
             <label for="openai_base_url">Base URL</label>
             <input class="ai-input" id="openai_base_url" name="openai_base_url" value="{{ config.openai_base_url }}" {{ 'disabled' if is_demo }}>
           </div>
-          <label class="ai-provider-card__active">
-            <input type="radio" name="provider" value="openai" {{ 'checked' if config.provider != 'gigachat' }} {{ 'disabled' if is_demo }}>
-            Сделать активным
+          <div class="ai-provider-card__field">
+            <label for="openai_model">Model</label>
+            <select class="ai-select" id="openai_model" name="openai_model" {{ 'disabled' if is_demo }}>
+              {% if config.openai_model not in openai_models %}<option value="{{ config.openai_model }}" selected>{{ config.openai_model }}</option>{% endif %}
+              {% for m in openai_models %}<option value="{{ m }}" {{ 'selected' if config.openai_model == m }}>{{ m }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="ai-grid ai-grid--2">
+            <div class="ai-provider-card__field">
+              <label for="openai_temperature">Temperature</label>
+              <input class="ai-input" id="openai_temperature" name="openai_temperature" type="number" step="0.1" min="0" max="2" value="{{ config.openai_temperature }}" {{ 'disabled' if is_demo }}>
+            </div>
+            <div class="ai-provider-card__field">
+              <label for="openai_max_tokens">Max tokens</label>
+              <input class="ai-input" id="openai_max_tokens" name="openai_max_tokens" type="number" step="1" min="1" value="{{ config.openai_max_tokens }}" {{ 'disabled' if is_demo }}>
+            </div>
+          </div>
+          <label class="ai-provider-card__enabled">
+            <input type="checkbox" name="openai_enabled" value="on" {{ 'checked' if config.openai_enabled != false }} {{ 'disabled' if is_demo }}>
+            Включён
           </label>
+          <div class="ai-actions-center">
+            <button type="submit" form="test-openai" class="ai-btn ai-btn--secondary ai-btn--small" {{ 'disabled' if is_demo }}>Проверить</button>
+          </div>
         </div>
 
         {# GigaChat #}
-        <div class="ai-provider-card {% if config.provider == 'gigachat' %}ai-provider-card--active{% endif %}">
+        <div class="ai-provider-card {% if config.active_provider == 'gigachat' %}ai-provider-card--active{% endif %}">
           <div class="ai-provider-card__header">
             <span class="ai-provider-card__name">GigaChat (Сбер)</span>
             <div class="ai-provider-card__badges">
-              {% if config.provider == 'gigachat' %}<span class="ai-chip ok">активен</span>{% endif %}
-              <span class="ai-chip {% if provs.get('gigachat') %}ok{% else %}skipped{% endif %}">{% if provs.get('gigachat') %}ключ настроен{% else %}ключ отсутствует{% endif %}</span>
+              {% if config.active_provider == 'gigachat' %}<span class="ai-chip ok">АКТИВНЫЙ</span>{% elif config.fallback_provider == 'gigachat' %}<span class="ai-chip skipped">РЕЗЕРВ</span>{% endif %}
+              {% if provs.get('gigachat') %}<span class="ai-chip ok">ГОТОВ</span>{% else %}<span class="ai-chip error">НЕ ГОТОВ</span>{% endif %}
             </div>
           </div>
-          <div class="ai-provider-card__row">
-            <label for="gigachat_model">Модель</label>
-            <input class="ai-input" id="gigachat_model" name="gigachat_model" value="{{ config.gigachat_model }}" {{ 'disabled' if is_demo }}>
+          <div class="ai-provider-card__field">
+            <label for="gigachat_base_url">Base URL <span class="ai-tooltip">ⓘ<span class="ai-tooltip__text">Base URL GigaChat хранится в .env обработчика (read-only). Смена требует правки .env и рестарта воркера.</span></span></label>
+            <input class="ai-input" id="gigachat_base_url" value="{{ w.gigachat_base_url or 'https://gigachat.devices.sberbank.ru/api/v1' }}" disabled>
           </div>
-          <label class="ai-provider-card__active">
-            <input type="radio" name="provider" value="gigachat" {{ 'checked' if config.provider == 'gigachat' }} {{ 'disabled' if is_demo }}>
-            Сделать активным
+          <div class="ai-provider-card__field">
+            <label for="gigachat_model">Model</label>
+            <select class="ai-select" id="gigachat_model" name="gigachat_model" {{ 'disabled' if is_demo }}>
+              {% if config.gigachat_model not in gigachat_models %}<option value="{{ config.gigachat_model }}" selected>{{ config.gigachat_model }}</option>{% endif %}
+              {% for m in gigachat_models %}<option value="{{ m }}" {{ 'selected' if config.gigachat_model == m }}>{{ m }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="ai-grid ai-grid--2">
+            <div class="ai-provider-card__field">
+              <label for="gigachat_temperature">Temperature</label>
+              <input class="ai-input" id="gigachat_temperature" name="gigachat_temperature" type="number" step="0.1" min="0" max="2" value="{{ config.gigachat_temperature }}" {{ 'disabled' if is_demo }}>
+            </div>
+            <div class="ai-provider-card__field">
+              <label for="gigachat_max_tokens">Max tokens</label>
+              <input class="ai-input" id="gigachat_max_tokens" name="gigachat_max_tokens" type="number" step="1" min="1" value="{{ config.gigachat_max_tokens }}" {{ 'disabled' if is_demo }}>
+            </div>
+          </div>
+          <label class="ai-provider-card__enabled">
+            <input type="checkbox" name="gigachat_enabled" value="on" {{ 'checked' if config.gigachat_enabled != false }} {{ 'disabled' if is_demo }}>
+            Включён
           </label>
+          <div class="ai-actions-center">
+            <button type="submit" form="test-gigachat" class="ai-btn ai-btn--secondary ai-btn--small" {{ 'disabled' if is_demo }}>Проверить</button>
+          </div>
         </div>
 
       </div>
+    </section>
 
-      {# Правая половина — системный промпт #}
-      <div class="ai-prompt-col">
-        <div class="ai-provider-card__row">
-          <label for="system_prompt">Системный промпт (файл-SOT)</label>
-          <textarea class="ai-textarea" id="system_prompt" name="system_prompt" {{ 'disabled' if is_demo }} placeholder="Текст системного промпта обработчика">{{ prompt_text }}</textarea>
-        </div>
-        <div class="ai-prompt-meta">
-          Файл-SOT <code>system_prompt.md</code> · {{ prompt_info.size }} байт{% if prompt_info.mtime %} · {{ prompt_info.mtime[:19] }}{% endif %}. Сохранение перезаписывает файл на shared volume; обработчик применит новый промпт на следующем цикле (hot-reload по mtime).
+    {# Панель 2 — Системный промпт #}
+    <section class="ai-card">
+      <div class="ai-section__head">
+        <div>
+          <div class="ai-section__title">
+            Системный промпт
+            <span class="ai-tooltip">ⓘ<span class="ai-tooltip__text">Единственный SOT — файл system_prompt.md на shared volume. Сохранение перезаписывает файл; обработчик применяет новый промпт на следующем цикле (hot-reload по mtime). Размер: {{ prompt_info.size }} байт{% if prompt_info.mtime %} · {{ prompt_info.mtime[:19] }}{% endif %}.</span></span>
+          </div>
+          <div class="ai-section__subtitle">Единственный SOT — файл system_prompt.md на shared volume.</div>
         </div>
       </div>
-    </div>
+      <div class="ai-prompt-panel">
+        <textarea class="ai-textarea" id="system_prompt" name="system_prompt" {{ 'disabled' if is_demo }} placeholder="Текст системного промпта обработчика">{{ prompt_text }}</textarea>
+      </div>
+    </section>
 
-    <div class="ai-actions">
-      {% if is_demo %}
-        <button type="submit" class="ai-btn" disabled title="Демо-режим: только просмотр">Сохранить (demo read-only)</button>
-      {% else %}
-        <button type="submit" class="ai-btn">Сохранить</button>
-      {% endif %}
-      <a class="ai-btn ai-btn--secondary ai-btn--small" href="/admin/status" target="_blank">JSON-статус</a>
-    </div>
-  </form>
-</section>
+  </div>
+</form>
+
+{# Скрытые формы для кнопок «Проверить» (сиблинги cfgForm — без вложенных форм).
+   Кнопки в карточках ссылаются на них через form-атрибут; отправляется только
+   provider_key. Endpoint /admin/test-provider проксирует в воркер. #}
+<form id="test-openai" method="post" action="/admin/test-provider" style="display:none;">
+  <input type="hidden" name="provider_key" value="openai">
+</form>
+<form id="test-gigachat" method="post" action="/admin/test-provider" style="display:none;">
+  <input type="hidden" name="provider_key" value="gigachat">
+</form>
 
 {% endblock %}

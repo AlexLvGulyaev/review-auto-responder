@@ -50,6 +50,8 @@ cp .env.example .env
 | `GIGACHAT_AUTH_KEY` | один из провайдеров | GigaChat |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_USER_CHAT_ID` | нет | Уведомления оператору (без них — пропуск) |
 | `APP_PORT` | нет | Порт сайта на хосте (по умолчанию `8000`) |
+| `WORKER_API_PORT` | нет | Внутренний test-API воркера для кнопки «Проверить» (по умолчанию `8001`, **не публикуется на хост**) |
+| `WORKER_TEST_URL` | нет | Адрес внутреннего test-API воркера для сайта (по умолчанию `http://review-worker:8001`; задаётся в compose) |
 | `WORKER_POLL_INTERVAL` | нет | Интервал опроса, сек (по умолчанию `10`) |
 | `LOG_LEVEL` | нет | Уровень stdout-логирования обоих сервисов (`DEBUG`/`INFO`/`WARNING`/...; по умолчанию `INFO`) |
 
@@ -173,24 +175,40 @@ curl -s "http://localhost:8000/api/reviews?status=new" | python3 -m json.tool
 
 ### 🖥️ 5.2. Смена провайдера и промпта без рестарта
 
-1. В `/admin` (токен `ADMIN_TOKEN`) в карточке GigaChat нажмите radio «Сделать
-   активным», при желании смените `gigachat_model` (по умолчанию `GigaChat-Max`)
-   → **Сохранить**.
-2. При желании отредактируйте поле «Системный промпт» — сохранение перезаписывает
+Конфиг-консоль `/admin` (токен `ADMIN_TOKEN`) — две панели: «Настройки ЛЛМ и
+провайдера» и «Системный промпт», плюс ридонли-блок «Состояние системы».
+
+1. В панели «Настройки ЛЛМ и провайдера» выберите **Активный провайдер** (select:
+   `openai`/`gigachat`) и **Fallback провайдер**. В карточках провайдеров (слева
+   направо) задайте per-провайдер параметры: **Base URL** (OpenAI — редактируемый,
+   GigaChat — read-only из `.env`), **Model**, **Temperature**, **Max tokens**,
+   чекбокс **Включён**. Нажмите **Сохранить** (в хидере консоли).
+2. При желании отредактируйте панель «Системный промпт» — сохранение перезаписывает
    файл `system_prompt.md` на shared volume (файл-SOT).
 3. Оставьте новый отзыв (см. §4.1).
 4. В течение цикла опроса воркер подхватит новый `config.json` и `system_prompt.md`
-   (по mtime) и сгенерирует ответ через GigaChat — **без рестарта** контейнера.
+   (по mtime) и сгенерирует ответ через активный LLM — **без рестарта** контейнера.
+   Если активный недоступен — сработает fallback LLM, затем словарные шаблоны.
 
-> 📌 Проверьте в логах: `Runtime config reloaded: provider=gigachat model=GigaChat-Max`
+> 📌 Проверьте в логах: `Runtime config reloaded: active=gigachat fallback=openai model=GigaChat-Max`
 > и (после обработки отзыва) `System prompt reloaded from /data/runtime/system_prompt.md`.
 
 > 📌 **Промпт — файл-SOT.** При первом запуске воркер копирует вшитый
 > `worker/prompts/v1/system.md` в `/data/runtime/system_prompt.md` (bootstrap).
 > Дальше единственный источник промпта — этот файл; `/admin` перезаписывает его.
-> Поля `system_prompt_override` в config.json больше нет.
+> Поля `system_prompt_override` в config.json больше нет. Legacy-поле `provider`
+> (старый config.json) бесшовно мигрируется в `active_provider`.
 
-### 🖥️ 5.2.1. Состояние системы
+### 🖥️ 5.2.1. «Проверить» — real-тест провайдера
+
+В каждой карточке провайдера есть кнопка **Проверить**. Нажатие выполняет real-вызов
+LLM (1-токенный тест) через внутренний test-API воркера (`POST /provider-test`,
+порт `WORKER_API_PORT`, **не публикуется на хост**, защищён `X-Worker-Token`). Сайт
+проксирует запрос (`POST /admin/test-provider`, `require_admin` — demo → `403`).
+Результат — flash-сообщение: «GigaChat: готов, 663мс, 1ток» (или ошибка). LLM-ключи
+остаются на воркере — сайт их не получает. Событие пишется в аудит (`admin.provider_test`).
+
+### 🖥️ 5.2.2. Состояние системы
 
 Блок «Состояние системы» вверху `/admin` (ридонли) + JSON-эндпоинт `GET /admin/status`:
 
@@ -198,7 +216,8 @@ curl -s "http://localhost:8000/api/reviews?status=new" | python3 -m json.tool
 - метрики: отзывы new/processed, трейсы ok/error/started, аудит-счётчик, последняя сессия;
 - liveness воркера (воркер пишет `status.json` в shared volume каждую итерацию —
   `worker_alive` = `last_iteration_at` свеже `3 × poll_interval`);
-- статус провайдеров (булевы флаги «сконфигурирован», без секретов) + последние ошибки трейсов.
+- статус провайдеров (булевы флаги «сконфигурирован», активный/fallback/enabled,
+  публичный `gigachat_base_url` — без секретов) + последние ошибки трейсов.
 
 ```bash
 curl -s -b /tmp/admin_cookies.txt http://localhost:8000/admin/status | python3 -m json.tool
@@ -213,7 +232,7 @@ curl -s -b /tmp/admin_cookies.txt http://localhost:8000/admin/status | python3 -
 # С demo-токеном — ожидается 403
 curl -s -o /dev/null -w "%{http_code}\n" -X POST http://localhost:8000/admin \
   -H "Cookie: admin_token=<ADMIN_DEMO_TOKEN>" \
-  -d "provider=openai&openai_model=gpt-4.1-mini&openai_base_url=https://api.openai.com/v1&gigachat_model=GigaChat-Max"
+  -d "active_provider=openai&fallback_provider=gigachat&openai_model=gpt-4.1-mini&openai_base_url=https://api.openai.com/v1&openai_temperature=0.3&openai_max_tokens=1024&gigachat_model=GigaChat-Max&gigachat_temperature=0.1&gigachat_max_tokens=500"
 ```
 
 Ожидаемый результат: `403`.
@@ -222,10 +241,14 @@ curl -s -o /dev/null -w "%{http_code}\n" -X POST http://localhost:8000/admin \
 # С admin-токеном — ожидается 200/302 (сохранение)
 curl -s -o /dev/null -w "%{http_code}\n" -X POST http://localhost:8000/admin \
   -H "Cookie: admin_token=<ADMIN_TOKEN>" \
-  -d "provider=openai&openai_model=gpt-4.1-mini&openai_base_url=https://api.openai.com/v1&gigachat_model=GigaChat-Max"
+  -d "active_provider=openai&fallback_provider=gigachat&openai_model=gpt-4.1-mini&openai_base_url=https://api.openai.com/v1&openai_temperature=0.3&openai_max_tokens=1024&gigachat_model=GigaChat-Max&gigachat_temperature=0.1&gigachat_max_tokens=500"
 ```
 
 Ожидаемый результат: `200` или `302` (редирект на `?saved=1`).
+
+> 📌 Чекбоксы `openai_enabled`/`gigachat_enabled` передаются только если отмечены
+> (HTML-поведение); в curl добавьте `&openai_enabled=on&gigachat_enabled=on` чтобы
+> включить оба провайдера в цепочку fallback.
 
 ### 🖥️ 5.4. Панели observability (`/admin/executions`, `/admin/audit`)
 

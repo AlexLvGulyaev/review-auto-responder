@@ -155,22 +155,24 @@ flowchart TD
 
 ### 🤖 5.1. Унификация
 
-Все провайдеры унифицированы на **Chat Completions** (общий знаменатель), не на legacy `responses.create`. Абстракция — `ResponseProvider.generate(system_prompt, user_text) -> str`; для observability провайдер дополнительно раскрывает `name`, `model_name` и `last_usage` (токены последнего запроса, `None` если провайдер не вернул usage) — `processor.generate_response` собирает из них `meta` для execution-трассировки.
+Все провайдеры унифицированы на **Chat Completions** (общий знаменатель), не на legacy `responses.create`. Абстракция — `ResponseProvider.generate(system_prompt, user_text, max_tokens=None) -> str` (опц. `max_tokens`-override — для дешёвого 1-токенного теста «Проверить»); для observability провайдер дополнительно раскрывает `name`, `model_name` и `last_usage` (токены последнего запроса, `None` если провайдер не вернул usage) — `processor.generate_response` собирает из них `meta` для execution-трассировки. Метод `test_connection() -> {ok, latency_ms, tokens, message}` делает минимальный real-вызов и используется внутренним test-API воркера (кнопка «Проверить»).
 
-| Провайдер | Реализация | Ключ |
-|-----------|-----------|------|
-| OpenAI | `OpenAICompatibleProvider` (AsyncOpenAI, `base_url` из runtime) | `OPENAI_API_KEY` (.env) |
-| GigaChat | `GigaChatProvider` → `GigaChatAdapter` (urllib, OAuth per-request) | `GIGACHAT_AUTH_KEY` (.env) |
+| Провайдер | Реализация | Ключ | Параметры (config.json) |
+|-----------|-----------|------|------------------------|
+| OpenAI | `OpenAICompatibleProvider` (AsyncOpenAI, `base_url` из runtime) | `OPENAI_API_KEY` (.env) | `openai_model`, `openai_base_url`, `openai_temperature` (0.3), `openai_max_tokens` (1024), `openai_enabled` |
+| GigaChat | `GigaChatProvider` → `GigaChatAdapter` (urllib, OAuth per-request) | `GIGACHAT_AUTH_KEY` (.env) | `gigachat_model`, `gigachat_temperature` (0.1), `gigachat_max_tokens` (500), `gigachat_enabled` (`gigachat_base_url` — в .env, read-only) |
+
+Цепочка fallback: **активный LLM → fallback LLM** (если включён, сконфигурирован и отличается от активного) **→ словарные шаблоны**. `processor.generate_response` фиксирует провайдера-победителя и `fallback_reason` (`provider_not_configured`/`provider_error`/`empty_response`/`llm_fallback_used:<reason>`).
 
 ### 🤖 5.2. Разделение секретов и runtime-параметров
 
 | Где | Что | Кто меняет |
 |-----|-----|-----------|
-| `.env` | API-ключи (секреты) | Владелец/инженер (перед развёртыванием) |
-| `config.json` (shared volume) | `provider`, `openai_model`, `openai_base_url`, `gigachat_model` | Оператор через `/admin` (без рестарта) |
+| `.env` | API-ключи (секреты) + `GIGACHAT_BASE_URL` | Владелец/инженер (перед развёртыванием) |
+| `config.json` (shared volume) | `active_provider`, `fallback_provider`, `openai_enabled`/`gigachat_enabled`, `openai_model`/`openai_base_url`/`openai_temperature`/`openai_max_tokens`, `gigachat_model`/`gigachat_temperature`/`gigachat_max_tokens` | Оператор через `/admin` (без рестарта) |
 | `system_prompt.md` (shared volume) | Текст системного промпта (файл-SOT) | Оператор через `/admin` (без рестарта) |
 
-> 📌 Ключи API **никогда** не попадают в `config.json`/`system_prompt.md`/браузер/`/admin`. `/admin` хранит только runtime-параметры и промпт.
+> 📌 Ключи API **никогда** не попадают в `config.json`/`system_prompt.md`/браузер/`/admin`. `/admin` хранит только runtime-параметры и промпт. Legacy-поле `provider` бесшовно мигрируется в `active_provider` при чтении.
 
 ### 🤖 5.3. Hot-reload (mtime-кеш)
 
@@ -237,7 +239,8 @@ flowchart TD
 | Action | Когда | details |
 |--------|-------|---------|
 | `admin.login_success` / `admin.login_failed` | вход в `/admin` | ip, path |
-| `admin.config_update` | сохранение runtime-config | provider/model/base_url, prompt_override_len, changed_keys (без текста промпта) |
+| `admin.config_update` | сохранение runtime-config | active/fallback/enabled, model/base_url/temperature/max_tokens per-провайдер, prompt_len, prompt_changed, changed_keys (без текста промпта) |
+| `admin.provider_test` | кнопка «Проверить» (real-тест провайдера) | provider, ok, результат (latency/tokens/message), error |
 | `admin.rbac_denied` | demo-попытка мутации → 403 | ip, path |
 | `auth.worker_denied` | плохой/отсутствующий `X-Worker-Token` → 401 | ip, path |
 
@@ -266,12 +269,21 @@ Read-only обзор здоровья: `overall` (ok/degraded) + живые пр
 последняя сессия) + текущий применённый конфиг + liveness воркера + статус
 провайдеров (bool-флаги configured) + последние ошибки трейсов.
 
-Воркер не имеет HTTP-эндпоинта для опроса сайтом — вместо обратного направления
-зависимости воркер пишет `status.json` в **shared volume** каждую итерацию
+Воркер пишет `status.json` в **shared volume** каждую итерацию
 (`write_worker_status`): `worker_alive`, `last_iteration_at`, `current_provider`,
-`poll_interval`, `providers: {openai/gigachat: bool}`, `telegram: bool`. Сайт читает файл
+`active_provider`, `fallback_provider`, `openai_enabled`, `gigachat_enabled`,
+`poll_interval`, `providers: {openai/gigachat: bool}`, `gigachat_base_url` (публичный,
+несекретный — для read-only отображения в карточке), `telegram: bool`. Сайт читает файл
 (`admin_status._read_worker_status`), liveness = `last_iteration_at` свежее
 `3 × poll_interval`. Секреты (ключи) в файл **не** пишутся — только булевы флаги.
+
+Для кнопки «Проверить» воркер дополнительно поднимает **внутренний test-HTTP-сервер**
+(`worker/api.py`, stdlib `asyncio.start_server`, порт `WORKER_API_PORT` по умолч. 8001,
+**не публикуется на хост**). Эндпоинт `POST /provider-test` защищён header
+`X-Worker-Token` (= `WORKER_API_TOKEN`), выполняет `build_provider_for_key` +
+`test_connection()` и возвращает `{ok, provider, model, latency_ms, tokens, message}`.
+Сайт проксирует запрос через `POST /admin/test-provider` (`require_admin`, stdlib
+`urllib` через `asyncio.to_thread`) — LLM-ключи остаются на воркере, сайт их не получает.
 
 Блок «Состояние системы» рендерится в `/admin` (server-side, из тех же данных);
 `GET /admin/status` отдаёт JSON для будущего JS-дэшборда. Auth: `admin_auth`

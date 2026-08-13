@@ -19,11 +19,32 @@ from config import get_settings
 logger = logging.getLogger("worker.runtime_config")
 
 DEFAULTS: dict[str, Any] = {
-    "provider": "openai",
+    "active_provider": "openai",
+    "fallback_provider": "gigachat",
+    "openai_enabled": True,
+    "gigachat_enabled": True,
     "openai_model": "gpt-4.1-mini",
     "openai_base_url": "https://api.openai.com/v1",
+    "openai_temperature": 0.3,
+    "openai_max_tokens": 1024,
     "gigachat_model": "GigaChat-Max",
+    "gigachat_temperature": 0.1,
+    "gigachat_max_tokens": 500,
 }
+
+
+def _migrate_legacy(data: dict[str, Any]) -> dict[str, Any]:
+    """Бесшовная миграция старого config.json (поле `provider`) → `active_provider`.
+
+    Live-демо может иметь старый config.json без active_provider/fallback_provider.
+    Маппим legacy `provider` в `active_provider`, а fallback — в противоположный.
+    """
+    if "active_provider" not in data and "provider" in data:
+        legacy = data["provider"]
+        data["active_provider"] = legacy
+        if "fallback_provider" not in data:
+            data["fallback_provider"] = "gigachat" if legacy == "openai" else "openai"
+    return data
 
 
 class RuntimeConfig:
@@ -51,11 +72,15 @@ class RuntimeConfig:
             logger.warning("runtime config read failed (%s): %s; keeping previous", self.path, exc)
             return
         merged = dict(DEFAULTS)
-        merged.update(data)
+        merged.update(_migrate_legacy(data))
         self._cache = merged
         self._mtime = stat.st_mtime
-        active_model = merged["gigachat_model"] if merged["provider"] == "gigachat" else merged["openai_model"]
-        logger.info("Runtime config reloaded: provider=%s model=%s", merged["provider"], active_model)
+        active = merged["active_provider"]
+        active_model = merged["gigachat_model"] if active == "gigachat" else merged["openai_model"]
+        logger.info(
+            "Runtime config reloaded: active=%s fallback=%s model=%s",
+            active, merged["fallback_provider"], active_model,
+        )
 
     def get(self, key: str, default: Any = None) -> Any:
         with self._lock:

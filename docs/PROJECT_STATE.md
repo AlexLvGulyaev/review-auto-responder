@@ -122,7 +122,7 @@
 
 - База — legacy-архитектура (сайт + обработчик), доработка по направлениям §2.
 - Мультипровайдерность: OpenAI / GigaChat (OAuth-адаптер) — единый адаптер Chat Completions. Смена провайдера через web-`/admin` в runtime, без рестарта (карточки провайдеров, radio «сделать активным»).
-- Web-`/admin` на сайте (домстиль AIP Dark, sidebar, 4 консоли): `provider`, `openai_model`, `openai_base_url`, `gigachat_model` → `config.json` в shared volume; обработчик hot-reload'ит по mtime. Секреты остаются в `.env`.
+- Web-`/admin` на сайте (домстиль AIP Dark, единый хидер «Admin Console» + зелёный «Zerocoder», sidebar с role-бейджем, 4 консоли): `active_provider`/`fallback_provider`, per-провайдер `model`/`base_url`/`temperature`/`max_tokens`/`enabled` → `config.json` в shared volume; обработчик hot-reload'ит по mtime. Секреты остаются в `.env`. Кнопка «Проверить» — real-тест через внутренний test-API воркера (ключи только на воркере). Описательные тексты — тултипы.
 - Промпт вынесен из `processor.py` в `system_prompt.md` на shared volume (файл-SOT); правка через `/admin` перезаписывает файл.
 - Единый `docker-compose.yml` (site + db + worker) с общим `WORKER_API_TOKEN` + `/health` — для воспроизводимого Deployment Validation.
 - Архитектура пути данных зафиксирована в `docs/ARCHITECTURE.md` (sequence-схема).
@@ -179,6 +179,7 @@
 | 2026-08-13 | Observability | Три контура: stdout-логирование (`LOG_LEVEL`, dictConfig, приглушённые httpx/openai), execution-tracing (`execution_sessions`+`execution_steps`, воркер пишет через API сайта, `/admin/executions` с LLM-метриками provider/model/latency_ms/tokens/fallback_reason), аудит (`audit_logs`, `/admin/audit`, события login/config/rbac/worker_denied). Верифицировано на живом демо (GigaChat: tokens=192, latency_ms=663); коммит `8e61c5e` в origin/main; public-boundary кода очищен |
 | 2026-08-13 | AIP Dark + file-SOT | Редизайн админки в домстиле AIP Dark (sidebar, 4 консоли); промпт — файл-SOT на shared volume (`system_prompt.md`, bootstrap из `prompts/v1/system.md`); консоль состояния системы `/admin/status` + `status.json` воркера в shared volume (liveness + bool-флаги провайдеров, без секретов) |
 | 2026-08-13 | Конфиг-консоль v1.3 | Двухколоночный лэйаут конфиг-консоли (карточки провайдеров OpenAI/GigaChat слева, промпт справа); ряд состояния системы — 5 плиток (PostgreSQL/Воркер/LLM/Telegram/API); per-provider модели (`gigachat_model`); Yandex-провайдер убран из кода и docs |
+| 2026-08-13 | Конфиг-консоль v1.4 | Паритет с эталонной Admin Console: единый статический хидер «Admin Console» + зелёный «Zerocoder»; role-бейдж в сайдбаре; per-console page-header. Две панели («Настройки ЛЛМ и провайдера» | «Системный промпт») side-by-side; карточки провайдеров слева направо со всеми параметрами (Base URL/Model/Temperature/Max tokens/Включён/Проверить); active/fallback LLM-chain; тултипы вместо inline-текстов; шрифты выровнены под эталон. Внутренний test-API воркера (`worker/api.py`, stdlib asyncio, порт 8001 не публикуется) + site-proxy `/admin/test-provider` — real-тест «Проверить» без передачи ключей на сайт |
 
 ---
 

@@ -14,6 +14,11 @@ class Settings(BaseSettings):
     app_port: int = 8000
     worker_api_token: str = "change-me"
 
+    # Worker test-API (внутренний HTTP-сервер воркера для кнопки «Проверить»).
+    # Сайт проксирует POST /admin/test-provider → http://review-worker:8001/provider-test
+    # с X-Worker-Token. LLM-ключи остаются на воркере — сайт их не получает.
+    worker_test_url: str = "http://review-worker:8001"
+
     # /admin — демо-RBAC (паттерн admin-console-read-only-demo-rbac).
     # ADMIN_TOKEN — полный доступ (мутации); ADMIN_DEMO_TOKEN — read-only.
     # admin_auth_enabled=False отключает auth (для тестов/локального режима).

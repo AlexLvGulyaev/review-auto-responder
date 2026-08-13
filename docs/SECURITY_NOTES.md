@@ -17,7 +17,9 @@
 | `GIGACHAT_AUTH_KEY` | `.env` | Провайдер GigaChat (OAuth-обмен) |
 | `TELEGRAM_BOT_TOKEN` | `.env` | Уведомления оператору |
 
-> ⚠️ **Все секреты — только в `.env`.** `.env` в `.gitignore`; в репозитории — `.env.example` с placeholder'ами `YOUR_*`. Ключи API **никогда** не попадают в файлы shared volume (`config.json`, `system_prompt.md`, `status.json`) и не передаются через `/admin`. Воркер пишет в `status.json` только булевы флаги «провайдер сконфигурирован» — не значения ключей.
+> ⚠️ **Все секреты — только в `.env`.** `.env` в `.gitignore`; в репозитории — `.env.example` с placeholder'ами `YOUR_*`. Ключи API **никогда** не попадают в файлы shared volume (`config.json`, `system_prompt.md`, `status.json`) и не передаются через `/admin`. Воркер пишет в `status.json` только булевы флаги «провайдер сконфигурирован» и публичный несекретный `gigachat_base_url` — не значения ключей.
+
+> 🔒 **«Проверить» (test-API воркера).** Кнопка «Проверить» в `/admin` выполняет real-вызов LLM, но LLM-ключи остаются **только на воркере**: сайт проксирует запрос (`POST /admin/test-provider`) во внутренний test-API воркера (`POST /provider-test`, порт `WORKER_API_PORT`, **не публикуется на хост**), защищённый `X-Worker-Token` (= `WORKER_API_TOKEN`). Публичный сайт ключей не получает. Эндпоинт — `require_admin` (demo → `403` + audit).
 
 ---
 
@@ -90,7 +92,8 @@
 | Action | Триггер | Записывается |
 |--------|---------|--------------|
 | `admin.login_success` / `admin.login_failed` | `POST /admin/login` | user, ip, path |
-| `admin.config_update` | `POST /admin` (сохранение) | provider/openai_model/openai_base_url/gigachat_model, prompt_len, prompt_changed, changed_keys |
+| `admin.config_update` | `POST /admin` (сохранение) | active/fallback/enabled, per-провайдер model/base_url/temperature/max_tokens, prompt_len, prompt_changed, changed_keys |
+| `admin.provider_test` | `POST /admin/test-provider` («Проверить») | provider, ok, результат (latency/tokens/message), error |
 | `admin.rbac_denied` | demo-попытка мутации → `403` | user, ip, path |
 | `auth.worker_denied` | плохой `X-Worker-Token` → `401` | ip, path |
 

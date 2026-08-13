@@ -38,6 +38,9 @@ services:
       ADMIN_AUTH_ENABLED: ${ADMIN_AUTH_ENABLED:-true}
       RUNTIME_PROMPT_PATH: /data/runtime/system_prompt.md
       WORKER_STATUS_PATH: /data/runtime/status.json
+      # Адрес внутреннего test-API воркера (кнопка «Проверить» в /admin).
+      # Порт НЕ публикуется на хост — сайт обращается по DNS сервиса compose.
+      WORKER_TEST_URL: http://review-worker:${WORKER_API_PORT:-8001}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     env_file:
       - .env
@@ -61,6 +64,9 @@ services:
     environment:
       TARGET_SITE_URL: http://review-site:8000
       WORKER_API_TOKEN: ${WORKER_API_TOKEN}
+      # Внутренний test-HTTP-сервер (кнопка «Проверить» в /admin). Порт НЕ
+      # публикуется на хост — сайт проксирует через DNS review-worker:8001.
+      WORKER_API_PORT: ${WORKER_API_PORT:-8001}
       WORKER_POLL_INTERVAL: ${WORKER_POLL_INTERVAL:-10}
       STATE_FILE_PATH: /service/data/state.json
       HEARTBEAT_FILE_PATH: /service/data/heartbeat.json

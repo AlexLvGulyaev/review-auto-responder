@@ -176,10 +176,17 @@ async def build_system_status(db: AsyncSession) -> dict[str, Any]:
 
     config = read_runtime_config()
     current_config = {
-        "provider": config.get("provider"),
+        "active_provider": config.get("active_provider"),
+        "fallback_provider": config.get("fallback_provider"),
+        "openai_enabled": config.get("openai_enabled"),
+        "gigachat_enabled": config.get("gigachat_enabled"),
         "openai_model": config.get("openai_model"),
         "openai_base_url": config.get("openai_base_url"),
+        "openai_temperature": config.get("openai_temperature"),
+        "openai_max_tokens": config.get("openai_max_tokens"),
         "gigachat_model": config.get("gigachat_model"),
+        "gigachat_temperature": config.get("gigachat_temperature"),
+        "gigachat_max_tokens": config.get("gigachat_max_tokens"),
         "prompt": prompt_info(),
     }
 

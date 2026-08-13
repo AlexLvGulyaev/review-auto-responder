@@ -78,11 +78,12 @@ flowchart TD
 | Точка входа | `worker.py` | Основной цикл, `wait_for_site`, `process_new_reviews` (обёртка каждого отзыва в execution-сессию), heartbeat |
 | HTTP-клиент | `client.py` | `check_site`, `fetch_new_reviews` (через `?status=new`), `create_review`, `update_review`, `start_execution`, `finish_execution` |
 | Классификатор | `processor.py` | `detect_tone` (словарь маркеров), `build_fallback_response`, `generate_response` → `(text, meta)` где `meta={provider, model, latency_ms, tokens, fallback_reason}` |
-| Провайдеры | `providers/base.py` | `ResponseProvider` ABC: `async generate(system, user) -> str`, `name`/`model_name`/`last_usage` для observability |
-| OpenAI-совместимый | `providers/openai_provider.py` | OpenAI SDK Chat Completions; `base_url` из runtime-config (любой OpenAI-compatible endpoint) |
-| GigaChat | `providers/gigachat_provider.py` | OAuth-адаптер, async-обёртка через `asyncio.to_thread` |
-| Фабрика | `providers/factory.py` | Выбор провайдера по `runtime.get("provider")` (openai/gigachat, не env) |
-| Runtime-config | `runtime_config.py` | mtime-кеш `config.json` из shared volume + `threading.Lock`; `get(key)` |
+| Провайдеры | `providers/base.py` | `ResponseProvider` ABC: `async generate(system, user, max_tokens=None) -> str`, `async test_connection()`, `name`/`model_name`/`last_usage` для observability |
+| OpenAI-совместимый | `providers/openai_provider.py` | OpenAI SDK Chat Completions; `base_url`/`temperature`/`max_tokens` из runtime-config |
+| GigaChat | `providers/gigachat_provider.py` | OAuth-адаптер, async-обёртка через `asyncio.to_thread`; `temperature`/`max_tokens` из runtime |
+| Фабрика | `providers/factory.py` | `build_provider_for_key`/`build_active_provider`/`build_fallback_provider` по `active_provider`/`fallback_provider` + `*_enabled` (openai/gigachat, не env) |
+| Test-API воркера | `worker/api.py` | stdlib `asyncio.start_server` (порт `WORKER_API_PORT`, внутр.); `POST /provider-test` (X-Worker-Token) → `test_connection` |
+| Runtime-config | `runtime_config.py` | mtime-кеш `config.json` из shared volume + `threading.Lock`; `get(key)`; миграция legacy `provider`→`active_provider` |
 | Промпт | `prompt_loader.py` | Чтение `system_prompt.md` из shared volume (файл-SOT, mtime-кеш); fallback на вшитый `prompts/v1/system.md` |
 | Промпт-файл | `prompts/v1/system.md` | Начальный default для bootstrap (копируется в shared volume при первом запуске) |
 | Состояние | `state.py` | `state.json`: `notified_review_ids`, `processed_review_ids` |
@@ -174,12 +175,19 @@ flowchart TD
 
 | Поле | Тип | Описание |
 |------|-----|----------|
-| `provider` | `str` | Активный провайдер: `openai`/`gigachat` |
+| `active_provider` | `str` | Активный LLM-провайдер: `openai`/`gigachat` (legacy `provider` мигрируется) |
+| `fallback_provider` | `str` | Fallback LLM-провайдер (если ≠ активного) |
+| `openai_enabled` | `bool` | Включён ли OpenAI в цепочке fallback |
+| `gigachat_enabled` | `bool` | Включён ли GigaChat в цепочке fallback |
 | `openai_model` | `str` | Модель OpenAI |
 | `openai_base_url` | `str` | base_url OpenAI / OpenAI-compatible endpoint |
+| `openai_temperature` | `float` | Temperature OpenAI (по умолч. 0.3) |
+| `openai_max_tokens` | `int` | Max tokens OpenAI (по умолч. 1024) |
 | `gigachat_model` | `str` | Модель GigaChat |
+| `gigachat_temperature` | `float` | Temperature GigaChat (по умолч. 0.1) |
+| `gigachat_max_tokens` | `int` | Max tokens GigaChat (по умолч. 500) |
 
-Промпт хранится отдельно — файл `system_prompt.md` на том же shared volume (файл-SOT), не поле `config.json`.
+Промпт хранится отдельно — файл `system_prompt.md` на том же shared volume (файл-SOT), не поле `config.json`. `gigachat_base_url` — в `.env` (read-only в карточке).
 
 **Секреты (`OPENAI_API_KEY`, `GIGACHAT_AUTH_KEY`) в `config.json` НЕ хранятся** — только в `.env` обработчика. `/admin` редактирует runtime-параметры, не ключи.
 
@@ -228,9 +236,10 @@ flowchart TD
 - [x] `GET /health` сайта → 200; healthcheck обработчика (heartbeat) → healthy.
 - [x] `GET /api/reviews?status=new` отдаёт только новые отзывы.
 - [x] Три отзыва (позитивный/негативный/нейтральный): тон определён, ответ сгенерирован, статус `processed`.
-- [x] `provider` (через `/admin`) = openai/gigachat — ответ генерируется через выбранный провайдер; при сбое/нет ключа — fallback.
-- [x] `/admin` меняет провайдер/модель/промпт в runtime — применяется на следующем цикле опроса без рестарта обработчика.
-- [x] Демо-RBAC: `ADMIN_DEMO_TOKEN` → чтение `/admin` разрешено, POST `/admin` → 403 (backend guard); `ADMIN_TOKEN` → мутации разрешены.
+- [x] `active_provider`/`fallback_provider` (через `/admin`) = openai/gigachat — ответ генерируется через активный LLM; при сбое/нет ключа — fallback LLM, затем словарные шаблоны. Per-провайдер `temperature`/`max_tokens`/`enabled` применяются в runtime.
+- [x] `/admin` меняет провайдер/модель/temperature/max_tokens/промпт в runtime — применяется на следующем цикле опроса без рестарта обработчика.
+- [x] «Проверить» — real-тест провайдера через внутренний test-API воркера (порт `WORKER_API_PORT`, не публикуется); сайт проксирует, LLM-ключи остаются на воркере; demo → 403; аудит `admin.provider_test`.
+- [x] Демо-RBAC: `ADMIN_DEMO_TOKEN` → чтение `/admin` разрешено, POST `/admin`/`/admin/test-provider` → 403 (backend guard); `ADMIN_TOKEN` → мутации разрешены.
 - [x] Промпт — файл-SOT на shared volume (`system_prompt.md`, bootstrap из вшитого `prompts/v1/system.md`); правка через `/admin` перезаписывает файл и влияет на ответ без правки кода.
 - [x] Секреты (ключи API) только в `.env`; `config.json` содержит только runtime-параметры.
 - [x] Self-reply предотвращён (обработчик не отвечает на собственные ответы).

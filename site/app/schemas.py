@@ -53,12 +53,24 @@ class RuntimeConfigUpdate(BaseModel):
     Secrets (API keys) are NOT here — only operator-tunable runtime params.
     The system prompt is a separate file-SOT (system_prompt.md on the shared
     volume), not a field of config.json.
+
+    Per-provider parameters (model/base_url/temperature/max_tokens) and the
+    active/fallback LLM chain mirror the worker's `runtime_config.DEFAULTS`.
+    `*_enabled` toggles whether a provider participates in the LLM fallback
+    chain. `gigachat_base_url` stays in .env (read-only in the card).
     """
 
-    provider: Literal["openai", "gigachat"] = "openai"
+    active_provider: Literal["openai", "gigachat"] = "openai"
+    fallback_provider: Literal["openai", "gigachat"] = "gigachat"
+    openai_enabled: bool = True
+    gigachat_enabled: bool = True
     openai_model: str = "gpt-4.1-mini"
     openai_base_url: str = "https://api.openai.com/v1"
+    openai_temperature: float = 0.3
+    openai_max_tokens: int = 1024
     gigachat_model: str = "GigaChat-Max"
+    gigachat_temperature: float = 0.1
+    gigachat_max_tokens: int = 500
 
 
 # --- Execution tracing (воркер → API сайта) -------------------------------

@@ -10,6 +10,12 @@ class Settings(BaseSettings):
     worker_api_token: str = "change-me"
     worker_poll_interval: int = 10
 
+    # --- внутренний test-HTTP-сервер (для кнопки «Проверить» в /admin) ---
+    # Порт НЕ публикуется на хост — сайт обращается к воркеру по DNS сервиса
+    # (http://review-worker:8001) внутри общей сети compose. Эндпоинт
+    # POST /provider-test защищён X-Worker-Token.
+    worker_api_port: int = 8001
+
     # Логирование: уровень логов (DEBUG/INFO/WARNING/ERROR), default INFO.
     log_level: str = "INFO"
 

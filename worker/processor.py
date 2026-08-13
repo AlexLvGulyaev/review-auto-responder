@@ -3,7 +3,11 @@ import time
 
 from models import ReviewTone
 from prompt_loader import load_system_prompt
-from providers import ProviderNotConfigured, build_provider
+from providers import (
+    ProviderNotConfigured,
+    build_active_provider,
+    build_fallback_provider,
+)
 
 
 logger = logging.getLogger("worker.processor")
@@ -52,6 +56,30 @@ def build_fallback_response(review_text: str) -> str:
     )
 
 
+async def _try_provider(provider, system_prompt: str, review_text: str) -> tuple[str, dict | None]:
+    """Один провайдер. Возвращает (text, meta) при успехе или (None, reason)."""
+    started = time.perf_counter()
+    try:
+        text = await provider.generate(system_prompt, review_text)
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        if text:
+            return text, {
+                "provider": provider.name,
+                "model": provider.model_name,
+                "latency_ms": latency_ms,
+                "tokens": getattr(provider, "last_usage", None),
+                "fallback_reason": None,
+            }
+        logger.warning("Provider %s returned empty response", provider.name)
+        return None, "empty_response"
+    except ProviderNotConfigured as exc:
+        logger.info("Provider not configured (%s)", exc)
+        return None, "provider_not_configured"
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Provider %s request failed: %s", provider.name, exc)
+        return None, "provider_error"
+
+
 async def generate_response(review_text: str) -> tuple[str, dict]:
     """Сгенерировать ответ через активный провайдер (runtime-config).
 
@@ -59,40 +87,39 @@ async def generate_response(review_text: str) -> tuple[str, dict]:
     execution-трассировки: `provider`, `model`, `latency_ms`, `fallback_reason`
     (если применён fallback), `tokens` (если провайдер вернул usage, иначе None).
 
-    Fallback на словарные шаблоны при: провайдер не настроен
-    (ProviderNotConfigured), сбой API, пустой ответ. Система продолжает
-    отвечать даже без ключа — fallback не падает.
+    Цепочка fallback: активный LLM → fallback LLM (если включён и сконфигурирован)
+    → словарные шаблоны. Система продолжает отвечать даже без ключей —
+    dict-fallback не падает.
     """
-    try:
-        provider = build_provider()
-        system_prompt = load_system_prompt()
-        started = time.perf_counter()
-        text = await provider.generate(system_prompt, review_text)
-        latency_ms = int((time.perf_counter() - started) * 1000)
-        if text:
-            meta = {
-                "provider": provider.name,
-                "model": provider.model_name,
-                "latency_ms": latency_ms,
-                "tokens": getattr(provider, "last_usage", None),
-                "fallback_reason": None,
-            }
-            return text, meta
-        logger.warning("Provider %s returned empty response, using fallback", provider.name)
-        fallback_reason = "empty_response"
-    except ProviderNotConfigured as exc:
-        logger.info("Provider not configured (%s), using fallback response generation", exc)
-        fallback_reason = "provider_not_configured"
-    except Exception as exc:  # noqa: BLE001
-        logger.exception("Provider request failed, using fallback: %s", exc)
-        fallback_reason = "provider_error"
+    system_prompt = load_system_prompt()
 
+    # 1. Активный провайдер.
+    try:
+        active = build_active_provider()
+        text, result = await _try_provider(active, system_prompt, review_text)
+        if text is not None:
+            return text, result
+        active_reason = result
+    except ProviderNotConfigured as exc:
+        logger.info("Active provider not configured (%s), trying fallback", exc)
+        active_reason = "provider_not_configured"
+
+    # 2. Fallback LLM-провайдер.
+    fallback = build_fallback_provider()
+    if fallback is not None:
+        text, result = await _try_provider(fallback, system_prompt, review_text)
+        if text is not None:
+            # Успех через fallback LLM — помечаем причину ухода с активного.
+            result = {**result, "fallback_reason": f"llm_fallback_used:{active_reason}"}
+            return text, result
+
+    # 3. Словарные шаблоны.
     text = build_fallback_response(review_text)
     meta = {
         "provider": "fallback",
         "model": "fallback",
         "latency_ms": None,
         "tokens": None,
-        "fallback_reason": fallback_reason,
+        "fallback_reason": active_reason,
     }
     return text, meta

@@ -63,20 +63,28 @@ def write_worker_status() -> None:
     """Status-снапшот в shared volume для /admin (liveness + статус провайдеров).
 
     Сайт читает этот файл без HTTP-вызова воркера. Секреты (ключи) НЕ пишем —
-    только булевы флаги «сконфигурирован ли провайдер».
+    только булевы флаги «сконфигурирован ли провайдер» и runtime-роль
+    (active/fallback/enabled).
     """
+    runtime = get_runtime_config()
     path = Path(settings.worker_status_path)
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "worker_alive": True,
         "last_iteration_at": datetime.now(timezone.utc).isoformat(),
         "target_site_url": settings.target_site_url,
-        "current_provider": get_runtime_config().get("provider"),
+        "current_provider": runtime.get("active_provider") or runtime.get("provider"),
+        "active_provider": runtime.get("active_provider"),
+        "fallback_provider": runtime.get("fallback_provider"),
+        "openai_enabled": bool(runtime.get("openai_enabled", True)),
+        "gigachat_enabled": bool(runtime.get("gigachat_enabled", True)),
         "poll_interval": settings.worker_poll_interval,
         "providers": {
             "openai": bool(settings.openai_api_key),
             "gigachat": bool(settings.gigachat_auth_key),
         },
+        # Публичные несекретные Base URL — для read-only отображения в карточках /admin.
+        "gigachat_base_url": settings.gigachat_base_url,
         "telegram": bool(settings.telegram_bot_token and settings.telegram_user_chat_id),
     }
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -233,15 +241,8 @@ async def process_new_reviews() -> int:
     return len(reviews)
 
 
-async def main() -> None:
-    await wait_for_site()
-    bootstrap_prompt()
-    logger.info(
-        "Worker started with poll interval=%s seconds, target site=%s",
-        settings.worker_poll_interval,
-        settings.target_site_url,
-    )
-
+async def poll_loop() -> None:
+    """Основной цикл опроса сайта и обработки новых отзывов."""
     while True:
         try:
             processed_count = await process_new_reviews()
@@ -252,6 +253,22 @@ async def main() -> None:
         write_heartbeat()
         write_worker_status()
         await asyncio.sleep(settings.worker_poll_interval)
+
+
+async def main() -> None:
+    await wait_for_site()
+    bootstrap_prompt()
+    logger.info(
+        "Worker started with poll interval=%s seconds, target site=%s",
+        settings.worker_poll_interval,
+        settings.target_site_url,
+    )
+
+    # Poll-loop + внутренний test-HTTP-сервер (для кнопки «Проверить» в /admin)
+    # работают параллельно в одном asyncio-цикле.
+    from api import serve_test_api  # локальный импорт — избегает цикла на старте
+
+    await asyncio.gather(poll_loop(), serve_test_api())
 
 
 if __name__ == "__main__":

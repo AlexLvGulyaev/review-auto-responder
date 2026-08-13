@@ -131,6 +131,42 @@
     .ai-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
     .ai-header__title { font-family: var(--ai-font-display); font-size: 1.125rem; font-weight: 700; letter-spacing: -0.01em; }
     .ai-header__subtitle { color: var(--ai-text-muted); font-size: 0.75rem; margin-top: 2px; }
+    .ai-header__brand { font-family: var(--ai-font-display); font-size: 1.125rem; font-weight: 700; color: var(--ai-success); letter-spacing: -0.01em; }
+
+    /* Per-console page-header (ниже единого хидера админки, после разделительной черты). */
+    .ai-page__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 16px; flex-wrap: wrap; }
+    .ai-page__title { font-family: var(--ai-font-display); font-size: 1.375rem; font-weight: 600; letter-spacing: -0.01em; margin: 0; }
+    .ai-page__subtitle { color: var(--ai-text-muted); font-size: 0.8125rem; margin-top: 4px; }
+    .ai-page__actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+    /* Роль-бейдж в сайдбаре (под brand), как демо-бейдж эталонной консоли. */
+    .ai-sidebar__badge {
+      margin: -4px 0 16px; padding: 8px 12px; border-radius: var(--ai-radius);
+      font-size: 0.75rem; font-weight: 600; display: flex; align-items: center; gap: 6px;
+    }
+    .ai-sidebar__badge--demo { background-color: rgba(245,158,11,0.12); color: var(--ai-warning); }
+    .ai-sidebar__badge--admin { background-color: rgba(34,197,94,0.12); color: var(--ai-success); }
+
+    /* Секция внутри карточки — заголовок + подзаголовок (как эталонные Section). */
+    .ai-section__title { font-family: var(--ai-font-display); font-size: 0.875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ai-text); }
+    .ai-section__subtitle { font-size: 0.75rem; color: var(--ai-text-muted); margin-top: 2px; }
+    .ai-section__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+
+    .ai-field-label { font-size: 0.6875rem; color: var(--ai-text-muted); font-weight: 600; }
+
+    /* CSS-only tooltip (наведение мышью) — заменяет inline-описательные тексты. */
+    .ai-tooltip { position: relative; cursor: help; border-bottom: 1px dotted var(--ai-text-muted); }
+    .ai-tooltip__text {
+      visibility: hidden; opacity: 0; transition: opacity 0.15s;
+      position: absolute; z-index: 50; left: 50%; bottom: 125%;
+      transform: translateX(-50%);
+      width: 260px; padding: 8px 10px;
+      background-color: var(--ai-surface-elevated); color: var(--ai-text-secondary);
+      border: 1px solid var(--ai-border); border-radius: 8px;
+      font-size: 0.72rem; font-weight: 400; line-height: 1.45; text-transform: none; letter-spacing: 0;
+      box-shadow: var(--ai-shadow); pointer-events: none;
+    }
+    .ai-tooltip:hover .ai-tooltip__text, .ai-tooltip:focus .ai-tooltip__text { visibility: visible; opacity: 1; }
 
     .ai-content { flex: 1; padding: 16px 20px 20px; overflow-y: auto; min-width: 0; }
 
@@ -190,8 +226,8 @@
       border-radius: var(--ai-radius);
     }
     .ai-metric__label { font-size: 0.6875rem; color: var(--ai-text-muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.04em; }
-    .ai-metric__value { font-size: 1.2rem; font-weight: 700; color: var(--ai-text); }
-    .ai-metric__note { font-size: 0.72rem; color: var(--ai-text-muted); margin-top: 4px; }
+    .ai-metric__value { font-size: 1.125rem; font-weight: 700; color: var(--ai-text); }
+    .ai-metric__note { font-size: 0.75rem; color: var(--ai-text-muted); margin-top: 4px; }
 
     .ai-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
     .ai-table th {
@@ -262,32 +298,46 @@
     .ai-card__head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; }
     .ai-card__head h2 { margin: 0; }
 
-    /* Двухколоночный лэйаут конфиг-консоли: слева — карточки провайдеров, справа — промпт. */
-    .ai-cfg-grid { display: grid; grid-template-columns: minmax(300px, 1fr) minmax(0, 1.35fr); gap: 16px; align-items: stretch; }
-    .ai-providers-col { display: grid; gap: 12px; align-content: start; }
+    /* Двухпанельный лэйаут конфиг-консоли: «Настройки ЛЛМ» | «Системный промпт». */
+    .ai-config-top { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: stretch; }
+    .ai-config-top > .ai-card { margin-bottom: 0; display: flex; flex-direction: column; }
+
+    /* Селекторы активного/fallback провайдера. */
+    .ai-provider-selects { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+
+    /* Карточки провайдеров — слева направо (side-by-side), как в эталоне. */
+    .ai-provider-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
     .ai-provider-card {
       background-color: rgba(255,255,255,0.02); border: 1px solid var(--ai-border);
-      border-radius: var(--ai-radius); padding: 12px; display: grid; gap: 8px;
+      border-radius: var(--ai-radius); padding: 12px; display: grid; gap: 10px;
     }
     .ai-provider-card--active { border-color: rgba(47,123,255,0.55); box-shadow: 0 0 0 1px rgba(47,123,255,0.25); }
     .ai-provider-card__header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
     .ai-provider-card__name { font-family: var(--ai-font-display); font-weight: 600; font-size: 0.9rem; }
     .ai-provider-card__badges { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
-    .ai-provider-card__row { display: grid; gap: 3px; }
-    .ai-provider-card__row label { font-size: 0.6875rem; color: var(--ai-text-muted); font-weight: 600; }
-    .ai-provider-card__active { display: flex; align-items: center; gap: 6px; font-size: 0.78rem; color: var(--ai-text-secondary); margin-top: 2px; cursor: pointer; }
-    .ai-provider-card__active input { accent-color: var(--ai-primary); width: auto; }
-    .ai-prompt-col { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-    .ai-prompt-col .ai-textarea { flex: 1; min-height: 360px; line-height: 1.55; }
+    .ai-provider-card__field { display: grid; gap: 3px; }
+    .ai-provider-card__field label { font-size: 0.6875rem; color: var(--ai-text-muted); font-weight: 600; }
+    .ai-provider-card__enabled { display: flex; align-items: center; gap: 6px; font-size: 0.78rem; color: var(--ai-text-secondary); cursor: pointer; }
+    .ai-provider-card__enabled input { accent-color: var(--ai-primary); width: auto; }
+    .ai-actions-center { display: flex; gap: 8px; align-items: center; justify-content: center; margin-top: 4px; }
+
+    .ai-prompt-panel { display: flex; flex-direction: column; gap: 8px; min-width: 0; flex: 1; }
+    .ai-prompt-panel .ai-textarea { flex: 1; min-height: 320px; line-height: 1.55; }
     .ai-prompt-meta { font-size: 0.72rem; color: var(--ai-text-muted); }
+
+    .ai-flash { padding: 10px 14px; border-radius: var(--ai-radius); font-size: 0.8125rem; margin-bottom: 14px; }
+    .ai-flash--ok { color: var(--ai-success); background-color: rgba(34,197,94,0.12); }
+    .ai-flash--err { color: var(--ai-error); background-color: rgba(239,68,68,0.12); }
 
     @media (max-width: 1024px) {
       .ai-grid--4, .ai-grid--5 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .ai-cfg-grid { grid-template-columns: 1fr; }
+      .ai-config-top { grid-template-columns: 1fr; }
+      .ai-provider-cards { grid-template-columns: 1fr; }
     }
     @media (max-width: 760px) {
       .ai-sidebar { width: 200px; }
       .ai-row, .ai-grid--2, .ai-grid--3, .ai-grid--4, .ai-grid--5 { grid-template-columns: 1fr; }
+      .ai-provider-selects { grid-template-columns: 1fr; }
       .ai-filters { grid-template-columns: 1fr 1fr; }
       .ai-filters .filter-actions { grid-column: 1 / -1; }
     }
@@ -300,6 +350,12 @@
         <span class="ai-sidebar__brand-icon">💬</span>
         <span>Review Auto Responder</span>
       </div>
+
+      {% if is_demo %}
+        <div class="ai-sidebar__badge ai-sidebar__badge--demo">🔒 Демо-режим: только просмотр</div>
+      {% else %}
+        <div class="ai-sidebar__badge ai-sidebar__badge--admin">🛠 Администратор</div>
+      {% endif %}
 
       <nav class="ai-nav">
         <div class="ai-nav__group">
@@ -330,20 +386,23 @@
       <div class="ai-header__wrapper">
         <div class="ai-header">
           <div>
-            <div class="ai-header__title">{% block page_title %}{% endblock %}</div>
-            <div class="ai-header__subtitle">{% block page_subtitle %}{% endblock %}</div>
+            <div class="ai-header__title">Admin Console</div>
+            <div class="ai-header__subtitle">FastAPI · операторская консоль</div>
           </div>
-          <div>
-            {% if is_demo %}
-              <span class="ai-badge ai-badge--demo">👁 Демо-режим · только просмотр</span>
-            {% else %}
-              <span class="ai-badge ai-badge--admin">🛠 Администратор</span>
-            {% endif %}
-          </div>
+          <div class="ai-header__brand">Zerocoder</div>
         </div>
       </div>
 
       <div class="ai-content">
+        {% block page_header %}
+        <div class="ai-page__header">
+          <div>
+            <h1 class="ai-page__title">{% block page_title %}{% endblock %}</h1>
+            <div class="ai-page__subtitle">{% block page_subtitle %}{% endblock %}</div>
+          </div>
+          <div class="ai-page__actions">{% block page_actions %}{% endblock %}</div>
+        </div>
+        {% endblock %}
         {% block content %}{% endblock %}
       </div>
     </div>

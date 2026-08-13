@@ -105,31 +105,50 @@ Health-эндпоинт для Deployment Verification/Validation.
 | `POST` | `/admin/login` | Логин: установка cookie `admin_token` (8 ч) | — |
 | `POST` | `/admin/logout` | Удаление cookie | — |
 | `POST` | `/admin` | Сохранение runtime-config в `config.json` + промпта в `system_prompt.md` | `require_admin` (demo → `403`) |
+| `POST` | `/admin/test-provider` | Real-тест провайдера (проксирует во внутренний test-API воркера) | `require_admin` (demo → `403`) |
 | `GET` | `/admin/status` | JSON-сводка состояния системы (overall/components/метрики/воркер/провайдеры) | `admin_auth` (demo допущен) |
 
 ### 🖥️ 2.3. Поля формы (POST `/admin`, form-data)
 
 | Поле | Тип | Описание |
 |------|-----|----------|
-| `provider` | `openai` \| `gigachat` | Активный провайдер (radio в карточке) → `config.json` |
+| `active_provider` | `openai` \| `gigachat` | Активный LLM-провайдер → `config.json` |
+| `fallback_provider` | `openai` \| `gigachat` | Fallback LLM-провайдер (если ≠ активного) → `config.json` |
+| `openai_enabled` | `on` (checkbox) | Включён ли OpenAI в цепочке fallback → `config.json` (bool) |
+| `gigachat_enabled` | `on` (checkbox) | Включён ли GigaChat в цепочке fallback → `config.json` (bool) |
 | `openai_model` | str | Модель OpenAI → `config.json` |
 | `openai_base_url` | str | base_url для OpenAI / OpenAI-compatible endpoint → `config.json` |
+| `openai_temperature` | float | Temperature OpenAI (по умолч. 0.3) → `config.json` |
+| `openai_max_tokens` | int | Max tokens OpenAI (по умолч. 1024) → `config.json` |
 | `gigachat_model` | str | Модель GigaChat → `config.json` |
+| `gigachat_temperature` | float | Temperature GigaChat (по умолч. 0.1) → `config.json` |
+| `gigachat_max_tokens` | int | Max tokens GigaChat (по умолч. 500) → `config.json` |
 | `system_prompt` | str | Текст системного промпта → перезаписывает `system_prompt.md` (файл-SOT) |
 
-Runtime-параметры (`provider`/`openai_model`/`openai_base_url`/`gigachat_model`) → атомарная запись
-`config.json` (tempfile + `os.replace`) в shared volume. Промпт (`system_prompt`)
-→ атомарная запись `system_prompt.md` в тот же shared volume. Воркер подхватывает
-оба по mtime на следующем цикле — без рестарта.
+Runtime-параметры → атомарная запись `config.json` (tempfile + `os.replace`) в shared
+volume. Промпт (`system_prompt`) → атомарная запись `system_prompt.md` в тот же shared
+volume. Воркер подхватывает оба по mtime на следующем цикле — без рестарта. Legacy-поле
+`provider` (старый config.json) бесшовно мигрируется в `active_provider` при чтении.
 
 > 📌 **Промпт — файл-SOT.** Единственный источник текста промпта — файл
 > `system_prompt.md` на shared volume. Сохранение в `/admin` перезаписывает его.
 > Поля `system_prompt_override` в config.json больше нет.
 
 > ⚠️ Ключи API сюда **не** передаются и **не** хранятся — только в `.env`.
+> `gigachat_base_url` хранится в `.env` воркера и отображается read-only.
 
-Сохранение конфига, вход в `/admin` и отказы авторизации пишутся в журнал аудита
-(см. §4). Сами просмотры `/admin` **не** аудируются.
+### 🖥️ 2.3.1. `POST /admin/test-provider` — «Проверить» (form-data)
+
+| Поле | Тип | Описание |
+|------|-----|----------|
+| `provider_key` | `openai` \| `gigachat` | Какого провайдера проверить |
+
+Прокси к внутреннему test-API воркера (`POST http://review-worker:8001/provider-test`,
+header `X-Worker-Token`). Воркер выполняет real-вызов (`build_provider_for_key` +
+`test_connection`, 1-токенный вызов), возвращает `{ok, provider, model, latency_ms,
+tokens, message}`. Сайт редиректит на `/admin?test=ok|err&prov=...&msg=...` (flash).
+Demo → `403` + audit `admin.rbac_denied`. LLM-ключи остаются на воркере — сайт их
+не получает.
 
 ### 🖥️ 2.4. `GET /admin/status` — состояние системы (JSON)
 
@@ -151,14 +170,22 @@ Read-only JSON-сводка (demo допущен). Формируется из �
     "recent_errors": []
   },
   "current_config": {
-    "provider": "gigachat", "openai_model": "gpt-4.1-mini", "openai_base_url": "https://api.openai.com/v1",
-    "gigachat_model": "GigaChat-Max",
+    "active_provider": "gigachat", "fallback_provider": "openai",
+    "openai_enabled": true, "gigachat_enabled": true,
+    "openai_model": "gpt-4.1-mini", "openai_base_url": "https://api.openai.com/v1",
+    "openai_temperature": 0.3, "openai_max_tokens": 1024,
+    "gigachat_model": "GigaChat-Max", "gigachat_temperature": 0.1, "gigachat_max_tokens": 500,
     "prompt": { "source": "file", "exists": true, "size": 1170, "mtime": "..." }
   },
   "worker": {
     "available": true, "worker_alive": true, "age_seconds": 3.1,
-    "last_iteration_at": "...", "current_provider": "gigachat", "poll_interval": 5,
-    "providers": { "openai": false, "gigachat": true }, "telegram": true
+    "last_iteration_at": "...", "current_provider": "gigachat",
+    "active_provider": "gigachat", "fallback_provider": "openai",
+    "openai_enabled": true, "gigachat_enabled": true,
+    "poll_interval": 5,
+    "providers": { "openai": true, "gigachat": true },
+    "gigachat_base_url": "https://gigachat.devices.sberbank.ru/api/v1",
+    "telegram": true
   }
 }
 ```
@@ -166,8 +193,8 @@ Read-only JSON-сводка (demo допущен). Формируется из �
 `overall = ok` если БД отвечает и воркер жив (и `status.json` доступен); иначе
 `degraded`. `worker_alive` = `last_iteration_at` свежее `3 × poll_interval`.
 `status.json` воркер пишет каждую итерацию в shared volume (liveness + bool-флаги
-«провайдер сконфигурирован», **без секретов**). Блок «Состояние системы» в
-`/admin` рендерится из тех же данных server-side.
+«провайдер сконфигурирован» + публичный `gigachat_base_url`, **без секретов**). Блок
+«Состояние системы» в `/admin` рендерится из тех же данных server-side.
 
 ---
 

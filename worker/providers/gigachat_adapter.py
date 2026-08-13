@@ -126,12 +126,13 @@ class GigaChatAdapter:
         model: str,
         messages: list[dict[str, Any]],
         temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
     ) -> dict[str, Any]:
         """Запрос `/chat/completions`. Возвращает {content, usage, model}.
 
         messages — список {role, content} (поддерживаются system/user/assistant),
-        как в OpenAI Chat Completions. Без response_format/max_tokens —
-        портабельно (GigaChat не поддерживает json_schema strict).
+        как в OpenAI Chat Completions. Без response_format — портабельно
+        (GigaChat не поддерживает json_schema strict). max_tokens опционален.
         """
         started = time.perf_counter()
         access_token = self._get_access_token()
@@ -139,6 +140,8 @@ class GigaChatAdapter:
         payload: dict[str, Any] = {"model": model, "messages": messages}
         if temperature is not None:
             payload["temperature"] = temperature
+        if max_tokens is not None:
+            payload["max_tokens"] = max_tokens
         headers = {
             "Authorization": f"Bearer {access_token}",
             "Content-Type": "application/json",
