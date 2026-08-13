@@ -355,7 +355,8 @@
     .ai-compact-row > .ai-compact-row__value { color: var(--ai-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .ai-compact-row > .ai-compact-row__value--mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 0.75rem; }
 
-    .ai-pipeline { display: flex; flex-direction: column; gap: 6px; }
+    .ai-pipeline { display: flex; flex-direction: column; gap: 6px;
+      max-height: 280px; overflow-y: auto; padding-right: 4px; }
     .ai-pipeline__step { border: 1px solid var(--ai-border-subtle); border-radius: 8px; background: rgba(0,0,0,0.12); }
     .ai-pipeline__step-head { display: flex; align-items: center; gap: 8px; padding: 8px 10px; flex-wrap: wrap; }
     .ai-pipeline__step-head .ai-step__time { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
@@ -378,7 +379,9 @@
       word-break: break-word; margin: 0; }
     .ai-biz-text { height: 150px; overflow: auto; background: rgba(0,0,0,0.2);
       border-radius: 6px; padding: 10px; font-size: 0.82rem; line-height: 1.45;
-      white-space: pre-wrap; word-break: break-word; color: var(--ai-text); margin: 0; }
+      white-space: pre-wrap; word-break: break-word; color: var(--ai-text); margin: 0;
+      font-family: inherit; }  /* inherit — чтобы <pre> Запроса не брал UA-моноширинный,
+                                  был идентичен <div> Ответа по размеру/шрифту */
     .ai-detail-head .ai-status + .ai-status { margin-left: 6px; }
 
     @media (max-width: 1024px) {
