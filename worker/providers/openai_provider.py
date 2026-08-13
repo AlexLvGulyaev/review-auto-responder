@@ -31,10 +31,15 @@ class OpenAICompatibleProvider(ResponseProvider):
         self._model = model
         self._label = label
         self._client = AsyncOpenAI(api_key=api_key, base_url=base_url, default_headers=default_headers)
+        self.last_usage: int | None = None
 
     @property
     def name(self) -> str:
         return self._label
+
+    @property
+    def model_name(self) -> str:
+        return self._model
 
     async def generate(self, system_prompt: str, user_text: str) -> str:
         response = await self._client.chat.completions.create(
@@ -44,6 +49,7 @@ class OpenAICompatibleProvider(ResponseProvider):
                 {"role": "user", "content": user_text},
             ],
         )
+        self.last_usage = response.usage.total_tokens if response.usage else None
         choice = response.choices[0] if response.choices else None
         content: Any = choice.message.content if choice and choice.message else ""
         return (content or "").strip()

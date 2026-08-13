@@ -78,13 +78,13 @@ Health-эндпоинт для Deployment Verification/Validation.
 
 **Ответ:** `200 OK` — объект `ReviewRead`.
 
-**Без токена / неверный токен:** `403 Forbidden`.
+**Без токена / неверный токен:** `401 Unauthorized` + запись `auth.worker_denied` в журнал аудита.
 
 ---
 
 ## 🖥️ 2. Операторская панель `/admin`
 
-Доступ по стандартному демо-сценарию APL: два токена (admin/demo), role-based guard на backend (`admin_auth` — чтение, `require_admin` — мутация → 403 для demo).
+Доступ — демо-RBAC на два токена (admin/demo), role-based guard на backend (`admin_auth` — чтение, `require_admin` — мутация → 403 для demo).
 
 ### 🖥️ 2.1. Модель доступа
 
@@ -119,6 +119,119 @@ Health-эндпоинт для Deployment Verification/Validation.
 Сохранение → атомарная запись `config.json` (tempfile + `os.replace`) в shared volume → воркер подхватывает по mtime на следующем цикле.
 
 > ⚠️ Ключи API сюда **не** передаются и **не** хранятся — только в `.env`.
+
+Сохранение конфига, вход в `/admin` и отказы авторизации пишутся в журнал аудита
+(см. §4). Сами просмотры `/admin` **не** аудируются.
+
+---
+
+## 🔁 3. Execution tracing (`/api/executions`)
+
+Воркер пишет трассы обработки отзывов через эти эндпоинты (у воркера нет
+БД-сессии — он отдельный сервис). **Авторизация:** заголовок
+`X-Worker-Token: <WORKER_API_TOKEN>` (общий с `PATCH /api/reviews`).
+
+### 🔁 3.1. `POST /api/executions` — старт сессии
+
+**Тело:**
+```json
+{ "review_id": 42, "route": "review_processing", "metadata": {} }
+```
+
+`review_id` опционален. Создаёт `execution_sessions` со `status=started`.
+
+**Ответ:** `201 Created`
+```json
+{ "id": 7, "review_id": 42, "status": "started", "route": "review_processing", "started_at": "...", "execution_metadata": {}, "steps": [] }
+```
+
+### 🔁 3.2. `PATCH /api/executions/{id}` — финал сессии
+
+Закрывает сессию: выставляет `status`, `finished_at`, `duration_ms`,
+`provider_key`/`model_name`, мерджит `metadata`, персистит все шаги одной
+транзакцией.
+
+**Тело:**
+```json
+{
+  "status": "ok",
+  "duration_ms": 3200,
+  "provider_key": "gigachat",
+  "model_name": "GigaChat",
+  "metadata": { "reply_id": 43 },
+  "steps": [
+    { "stage_name": "detect_tone", "step_order": 1, "status": "ok", "duration_ms": 0, "step_metadata": { "tone": "positive" } },
+    { "stage_name": "llm_call", "step_order": 3, "status": "ok", "duration_ms": 3100, "step_metadata": { "provider": "gigachat", "model": "GigaChat", "latency_ms": 3100, "tokens": 180, "fallback_reason": null } }
+  ]
+}
+```
+
+| Поле | Тип | Описание |
+|------|-----|----------|
+| `status` | `ok` \| `error` | Результат обработки |
+| `duration_ms` | int \| null | Длительность всей обработки |
+| `provider_key` / `model_name` | str \| null | LLM-провайдер/модель (из LLM-meta) |
+| `metadata` | dict | Доп. метаданные сессии |
+| `steps` | list[`ExecutionStepIn`] | Шаги пайплайна (`stage_name`, `step_order`, `status` `ok`/`error`/`skipped`, `duration_ms`, `step_metadata`) |
+
+**Ответ:** `200 OK` — объект `ExecutionRead` (сессия со `steps`).
+
+**Без токена / неверный токен:** `401 Unauthorized` + `auth.worker_denied` в аудит.
+
+> 📌 Двухфазная запись: 2 HTTP-вызова на отзыв. При падении воркера между start
+> и finish остаётся `started`-сессия (диагностический признак зависшей обработки).
+
+---
+
+## 📜 4. Журнал аудита и трейсов (`/admin/audit`, `/admin/executions`)
+
+Read-only панели observability. **Auth:** `admin_auth` (demo-токен допущен —
+только просмотр, как остальные `/admin`-чтения). Просмотры **не** аудируются.
+
+### 📜 4.1. `GET /admin/audit` — список записей аудита
+
+| Параметр | Тип | Описание |
+|----------|-----|----------|
+| `action` | str (опц.) | Фильтр по действию (`admin.config_update`, ...) |
+| `resource_type` | str (опц.) | Фильтр по типу ресурса |
+| `user_id` | str (опц.) | Фильтр по `user_id` или `user_name` |
+| `date_from` / `date_to` | `YYYY-MM-DD` (опц.) | Диапазон по `created_at` |
+| `limit` / `offset` | int | Пагинация (default `100`/`0`, max `500`) |
+
+Возвращает HTML-таблицу записей `audit_logs`.
+
+### 📜 4.2. `GET /admin/audit/{id}` — деталь записи аудита
+
+HTML-карточка: действие, ресурс, пользователь/роль, IP, время, `details` (JSON).
+
+### 📜 4.3. `GET /admin/executions` — список трейсов обработки
+
+| Параметр | Тип | Описание |
+|----------|-----|----------|
+| `review_id` | int (опц.) | Фильтр по отзыву |
+| `status` | `ok`/`error`/`started` (опц.) | Фильтр по статусу |
+| `provider` | str (опц.) | Фильтр по провайдеру |
+| `date_from` / `date_to` | `YYYY-MM-DD` (опц.) | Диапазон по `started_at` |
+| `limit` / `offset` | int | Пагинация (default `50`/`0`, max `200`) |
+
+Возвращает HTML-таблицу сессий с шагами-чипами.
+
+### 📜 4.4. `GET /admin/executions/{id}` — деталь сессии
+
+HTML: параметры сессии (статус/провайдер/модель/длительность) + таблица шагов
+пайплайна с `step_metadata` (для `llm_call` — provider/model/latency_ms/tokens/fallback_reason).
+
+### 📜 4.5. События аудита
+
+| Action | Триггер |
+|--------|---------|
+| `admin.login_success` / `admin.login_failed` | `POST /admin/login` |
+| `admin.config_update` | `POST /admin` (успешное сохранение) |
+| `admin.rbac_denied` | demo-попытка мутации → `403` |
+| `auth.worker_denied` | плохой `X-Worker-Token` на `PATCH /api/reviews` / `/api/executions` → `401` |
+
+> ⚠️ В `details` аудита не пишутся секреты и полный текст промпт-override
+> (только длина + список изменённых ключей).
 
 ---
 

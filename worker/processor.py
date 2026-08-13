@@ -1,4 +1,5 @@
 import logging
+import time
 
 from models import ReviewTone
 from prompt_loader import load_system_prompt
@@ -51,8 +52,12 @@ def build_fallback_response(review_text: str) -> str:
     )
 
 
-async def generate_response(review_text: str) -> str:
+async def generate_response(review_text: str) -> tuple[str, dict]:
     """Сгенерировать ответ через активный провайдер (runtime-config).
+
+    Возвращает кортеж `(text, meta)`, где `meta` несёт observability-данные для
+    execution-трассировки: `provider`, `model`, `latency_ms`, `fallback_reason`
+    (если применён fallback), `tokens` (если провайдер вернул usage, иначе None).
 
     Fallback на словарные шаблоны при: провайдер не настроен
     (ProviderNotConfigured), сбой API, пустой ответ. Система продолжает
@@ -61,13 +66,33 @@ async def generate_response(review_text: str) -> str:
     try:
         provider = build_provider()
         system_prompt = load_system_prompt()
+        started = time.perf_counter()
         text = await provider.generate(system_prompt, review_text)
+        latency_ms = int((time.perf_counter() - started) * 1000)
         if text:
-            return text
+            meta = {
+                "provider": provider.name,
+                "model": provider.model_name,
+                "latency_ms": latency_ms,
+                "tokens": getattr(provider, "last_usage", None),
+                "fallback_reason": None,
+            }
+            return text, meta
         logger.warning("Provider %s returned empty response, using fallback", provider.name)
+        fallback_reason = "empty_response"
     except ProviderNotConfigured as exc:
         logger.info("Provider not configured (%s), using fallback response generation", exc)
+        fallback_reason = "provider_not_configured"
     except Exception as exc:  # noqa: BLE001
         logger.exception("Provider request failed, using fallback: %s", exc)
+        fallback_reason = "provider_error"
 
-    return build_fallback_response(review_text)
+    text = build_fallback_response(review_text)
+    meta = {
+        "provider": "fallback",
+        "model": "fallback",
+        "latency_ms": None,
+        "tokens": None,
+        "fallback_reason": fallback_reason,
+    }
+    return text, meta

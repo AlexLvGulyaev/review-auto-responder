@@ -10,6 +10,9 @@ class Settings(BaseSettings):
     worker_api_token: str = "change-me"
     worker_poll_interval: int = 10
 
+    # Логирование: уровень логов (DEBUG/INFO/WARNING/ERROR), default INFO.
+    log_level: str = "INFO"
+
     # --- локальное состояние / heartbeat ---
     state_file_path: str = "data/state.json"
     heartbeat_file_path: str = "data/heartbeat.json"

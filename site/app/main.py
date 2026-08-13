@@ -5,16 +5,19 @@ from fastapi import FastAPI
 from sqlalchemy import text
 
 from app.api.admin import router as admin_router
+from app.api.admin_executions import router as admin_executions_router
+from app.api.audit import router as audit_router
+from app.api.executions import router as executions_router
 from app.api.routes import router as reviews_router
+from app.core.logging import configure_logging
 from app.db.base import Base
 from app.db.session import engine
 from app.models import Review  # noqa: F401
+from app.models.audit import AuditLog  # noqa: F401
+from app.models.execution import ExecutionSession, ExecutionStep  # noqa: F401
 
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
-)
+configure_logging()
 logger = logging.getLogger(__name__)
 
 
@@ -32,3 +35,6 @@ async def lifespan(_: FastAPI):
 app = FastAPI(title="Reviews App", lifespan=lifespan)
 app.include_router(reviews_router)
 app.include_router(admin_router)
+app.include_router(executions_router)
+app.include_router(audit_router)
+app.include_router(admin_executions_router)

@@ -1,4 +1,4 @@
-"""Runtime-config — mtime-кеш config.json из shared volume (паттерн PEcb08).
+"""Runtime-config — mtime-кеш config.json из shared volume.
 
 Сайт пишет config.json через /admin; обработчик hot-reload'ит его по mtime —
 смена провайдера/модели/промпта применяется на следующем цикле опроса без

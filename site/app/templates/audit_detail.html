@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Аудит #{{ entry.id }} · Review Auto Responder</title>
+  <style>
+    :root { color-scheme: light; --bg:#f3f5f7; --card:#fff; --text:#17202a; --muted:#5c6b7a; --border:#d7dde4; --accent:#1f6feb; --success:#1a7f37; --error:#cf222e; --warn:#9a6700; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family:"Segoe UI",Tahoma,sans-serif; background:var(--bg); color:var(--text); }
+    .container { width:min(820px, calc(100% - 32px)); margin:0 auto; padding:32px 0 48px; }
+    .card { background:var(--card); border:1px solid var(--border); border-radius:18px; padding:28px; box-shadow:0 12px 35px rgba(15,23,42,.06); }
+    header { display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; gap:12px; flex-wrap:wrap; }
+    h1 { margin:0; font-size:22px; }
+    .nav { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:20px; }
+    .nav a { font-size:13px; color:var(--muted); text-decoration:none; border:1px solid var(--border); border-radius:10px; padding:7px 13px; background:#fff; }
+    .nav a:hover { color:var(--accent); border-color:var(--accent); }
+    .muted { color:var(--muted); font-size:13px; }
+    .grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+    .kv { border:1px solid var(--border); border-radius:12px; padding:14px 16px; }
+    .kv label { display:block; font-size:12px; color:var(--muted); font-weight:600; margin-bottom:4px; }
+    .kv span { font-size:15px; word-break:break-word; }
+    .badge { display:inline-flex; border-radius:999px; padding:3px 10px; font-size:12px; font-weight:600; }
+    .badge.deny { color:var(--error); background:rgba(207,34,46,.12); }
+    .badge.ok { color:var(--success); background:rgba(26,127,55,.12); }
+    .badge.info { color:var(--muted); background:rgba(92,107,122,.12); }
+    pre.meta { margin:0; white-space:pre-wrap; word-break:break-word; font-size:13px; background:#f7f9fb; border:1px solid var(--border); border-radius:10px; padding:14px 16px; overflow-x:auto; }
+    @media (max-width:640px){ .grid{ grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+  <main class="container">
+    <nav class="nav">
+      <a href="/admin/audit">← К журналу аудита</a>
+      <a href="/admin">Конфиг</a>
+      <a href="/admin/executions">Трейсы</a>
+      <a href="/">на сайт</a>
+    </nav>
+
+    <section class="card">
+      <header>
+        <h1>Запись #{{ entry.id }}</h1>
+        {% if entry.action in ('admin.rbac_denied', 'admin.login_failed', 'auth.worker_denied') %}
+          <span class="badge deny">{{ entry.action }}</span>
+        {% elif entry.action in ('admin.login_success', 'admin.config_update') %}
+          <span class="badge ok">{{ entry.action }}</span>
+        {% else %}
+          <span class="badge info">{{ entry.action }}</span>
+        {% endif %}
+      </header>
+
+      <div class="grid">
+        <div class="kv"><label>Действие</label><span>{{ entry.action }}</span></div>
+        <div class="kv"><label>Ресурс</label><span>{{ entry.resource_type }}{% if entry.resource_id %} / {{ entry.resource_id }}{% endif %}</span></div>
+        <div class="kv"><label>Пользователь</label><span>{{ entry.user_name or '—' }}{% if entry.user_id %} <span class="muted">(id: {{ entry.user_id }})</span>{% endif %}</span></div>
+        <div class="kv"><label>Роль</label><span>{{ entry.user_role or '—' }}</span></div>
+        <div class="kv"><label>IP-адрес</label><span>{{ entry.ip_address or '—' }}</span></div>
+        <div class="kv"><label>Время</label><span class="muted">{{ entry.created_at.strftime('%Y-%m-%d %H:%M:%S') if entry.created_at else '—' }}</span></div>
+      </div>
+
+      <div style="margin-top:18px;">
+        <label style="display:block;font-size:12px;color:var(--muted);font-weight:600;margin-bottom:6px;">Детали</label>
+        <pre class="meta">{{ entry.details | tojson }}</pre>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

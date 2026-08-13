@@ -33,6 +33,9 @@
     .alert.ok { color:var(--success); background:rgba(26,127,55,.1); }
     .alert.demo { color:var(--warn); background:rgba(154,103,0,.1); }
     .logout { border:1px solid var(--border); border-radius:12px; padding:11px 16px; background:#fff; color:var(--text); font:inherit; cursor:pointer; text-decoration:none; }
+    .tabs { display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap; }
+    .tabs a { font-size:13px; color:var(--muted); text-decoration:none; border:1px solid var(--border); border-radius:10px; padding:7px 14px; background:#fff; }
+    .tabs a.active, .tabs a:hover { color:var(--accent); border-color:var(--accent); }
     @media (max-width:640px){ .row{ grid-template-columns:1fr; } }
   </style>
 </head>
@@ -50,6 +53,12 @@
           <a href="/">на сайт</a>
         </div>
       </header>
+
+      <nav class="tabs">
+        <a href="/admin" class="active">Конфиг</a>
+        <a href="/admin/executions">Трейсы обработки</a>
+        <a href="/admin/audit">Аудит</a>
+      </nav>
 
       {% if is_demo %}
         <div class="alert demo">Вы вошли в демо-режим. Просмотр разрешён, изменение конфигурации заблокировано на backend (POST /admin → 403).</div>

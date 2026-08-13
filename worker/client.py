@@ -52,3 +52,48 @@ class ReviewSiteClient:
             response.raise_for_status()
         logger.info("Review id=%s updated on target site", review_id)
         return RemoteReview.model_validate(response.json())
+
+    # --- execution tracing (воркер → API сайта) ---------------------------
+
+    async def start_execution(
+        self,
+        review_id: int | None,
+        route: str = "review_processing",
+        metadata: dict | None = None,
+    ) -> int:
+        """Создать execution-сессию (status=started). Возвращает session id."""
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.post(
+                f"{self._base_url}/api/executions",
+                headers=self._headers,
+                json={"review_id": review_id, "route": route, "metadata": metadata or {}},
+            )
+            response.raise_for_status()
+        return int(response.json()["id"])
+
+    async def finish_execution(
+        self,
+        execution_id: int,
+        *,
+        status: str,
+        duration_ms: int | None = None,
+        provider_key: str | None = None,
+        model_name: str | None = None,
+        metadata: dict | None = None,
+        steps: list[dict] | None = None,
+    ) -> None:
+        """Закрыть сессию: статус, длительность, провайдер/модель, шаги."""
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.patch(
+                f"{self._base_url}/api/executions/{execution_id}",
+                headers=self._headers,
+                json={
+                    "status": status,
+                    "duration_ms": duration_ms,
+                    "provider_key": provider_key,
+                    "model_name": model_name,
+                    "metadata": metadata or {},
+                    "steps": steps or [],
+                },
+            )
+            response.raise_for_status()

@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     # Shared volume path: /admin writes config.json here, worker hot-reloads it.
     runtime_config_path: str = "/data/runtime/config.json"
 
+    # Логирование: уровень логов (DEBUG/INFO/WARNING/ERROR), default INFO.
+    log_level: str = "INFO"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

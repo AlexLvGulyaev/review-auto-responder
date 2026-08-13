@@ -2,7 +2,7 @@
 
 Единый SOT текста промпта — `prompts/v1/system.md` (не хардкод в коде).
 Override: если в runtime-config задан `system_prompt_override` (через /admin),
-используется он — применяется на следующем цикле без рестарта (паттерн PEcb08 F4).
+используется он — применяется на следующем цикле без рестарта.
 """
 
 from __future__ import annotations

@@ -35,10 +35,15 @@ class GigaChatProvider(ResponseProvider):
             auth_key=auth_key,
             ca_bundle=ca_bundle or None,
         )
+        self.last_usage: int | None = None
 
     @property
     def name(self) -> str:
         return "gigachat"
+
+    @property
+    def model_name(self) -> str:
+        return self._model
 
     async def generate(self, system_prompt: str, user_text: str) -> str:
         messages = [
@@ -48,4 +53,6 @@ class GigaChatProvider(ResponseProvider):
         result = await asyncio.to_thread(
             self._adapter.chat_completions, model=self._model, messages=messages
         )
+        usage = result.get("usage") or {}
+        self.last_usage = usage.get("total_tokens")
         return (result.get("content") or "").strip()

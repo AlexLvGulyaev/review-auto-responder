@@ -6,9 +6,7 @@ GigaChat не является drop-in OpenAI-совместимым прова�
 API-ключа используется authorization key, который обменивается на короткоживущий
 access token (~30 мин) через `/oauth` endpoint с HTTP Basic. Этот адаптер
 запрашивает свежий access token перед каждым запросом — refresh скрыт под
-капотом, ручного обновления оператором не требуется (адаптер заимствован из
-`cases/ai-data-assistant/app/services/gigachat_adapter.py`, исходно — из
-`cases/ai-curator`).
+капотом, ручного обновления оператором не требуется.
 
 Возвращает сырой текст ответа — без structured_output (GigaChat не поддерживает
 json_schema strict).

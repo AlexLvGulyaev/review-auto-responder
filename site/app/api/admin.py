@@ -1,9 +1,8 @@
 """Операторская панель /admin — runtime-config обработчика.
 
-Доступ — по стандартному демо-сценарию APL (паттерн
-`shared/patterns/admin-console-read-only-demo-rbac.md`):
+Доступ — демо-RBAC на два токена:
 
-- два токена: `ADMIN_TOKEN` (полный) и `ADMIN_DEMO_TOKEN` (read-only);
+- `ADMIN_TOKEN` (полный) и `ADMIN_DEMO_TOKEN` (read-only);
 - `AdminIdentity` с ролью admin/demo;
 - `admin_auth` — идентификация (чтение `/admin` допускает demo);
 - `require_admin` — guard мутаций: POST `/admin` → 403 для demo;
@@ -11,11 +10,12 @@
   отклоняется на мутации, обход UI невозможен);
 - UI-бейдж «Демо-режим: только просмотр» + disabled кнопка сохранения.
 
-Транспорт: server-rendered Jinja2 + cookie-сессия (адаптация Bearer→cookie
-для server-rendered HTMX-страницы; ядро паттерна — identity/роль/guard —
-сохранено). Секреты (ключи провайдеров) в `config.json` НЕ хранятся — только
-runtime-параметры; `config.json` пишется в shared volume, обработчик
-hot-reload'ит его по mtime.
+Транспорт: server-rendered Jinja2 + cookie-сессия. Секреты (ключи провайдеров)
+в `config.json` НЕ хранятся — только runtime-параметры; `config.json` пишется
+в shared volume, обработчик hot-reload'ит его по mtime.
+
+Admin/security-события (логин, смена конфига, RBAC-отказ) пишутся в audit_logs
+через `AuditService`.
 """
 
 from __future__ import annotations
@@ -31,8 +31,11 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings, get_settings
+from app.db.session import get_db_session
+from app.services.audit import AuditService, client_ip
 
 
 logger = logging.getLogger(__name__)
@@ -87,9 +90,22 @@ async def admin_auth(request: Request) -> AdminIdentity:
     return identity
 
 
-async def require_admin(admin: AdminIdentity = Depends(admin_auth)) -> AdminIdentity:
-    """Guard мутаций: demo-роль → 403. Backend — единственная защита."""
+async def require_admin(
+    request: Request,
+    admin: AdminIdentity = Depends(admin_auth),
+    db: AsyncSession = Depends(get_db_session),
+) -> AdminIdentity:
+    """Guard мутаций: demo-роль → 403 + audit admin.rbac_denied. Backend — единственная защита."""
     if admin.is_demo:
+        await AuditService(db).log_audit(
+            action="admin.rbac_denied",
+            resource_type="runtime_config",
+            user_id=admin.user_id,
+            user_name=admin.user_name,
+            user_role=admin.user_role,
+            ip_address=client_ip(request),
+            details={"path": request.url.path},
+        )
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Demo access is read-only")
     return admin
 
@@ -164,14 +180,33 @@ async def admin_login_form(request: Request, error: str | None = None):
 
 
 @router.post("/login")
-async def admin_login(request: Request, token: str = Form(...)):
+async def admin_login(
+    request: Request,
+    token: str = Form(...),
+    db: AsyncSession = Depends(get_db_session),
+):
     identity = _identity_from_token(token)
+    ip = client_ip(request)
     if identity is None:
+        await AuditService(db).log_audit(
+            action="admin.login_failed",
+            resource_type="admin_session",
+            ip_address=ip,
+            details={"path": request.url.path},
+        )
         return templates.TemplateResponse(
             "admin_login.html",
             {"request": request, "error": "Неверный токен."},
             status_code=status.HTTP_401_UNAUTHORIZED,
         )
+    await AuditService(db).log_audit(
+        action="admin.login_success",
+        resource_type="admin_session",
+        user_id=identity.user_id,
+        user_name=identity.user_name,
+        user_role=identity.user_role,
+        ip_address=ip,
+    )
     response = RedirectResponse(url="/admin", status_code=status.HTTP_303_SEE_OTHER)
     response.set_cookie(
         key=COOKIE_NAME,
@@ -201,7 +236,9 @@ async def admin_save(
     openai_base_url: str = Form(...),
     yandex_folder_id: str = Form(""),
     system_prompt_override: str = Form(""),
+    db: AsyncSession = Depends(get_db_session),
 ):
+    previous = read_runtime_config()
     payload = {
         "provider": provider,
         "openai_model": openai_model,
@@ -210,6 +247,24 @@ async def admin_save(
         "system_prompt_override": system_prompt_override,
     }
     write_runtime_config(payload)
+    changed_keys = sorted(k for k in payload if previous.get(k) != payload[k])
+    await AuditService(db).log_audit(
+        action="admin.config_update",
+        resource_type="runtime_config",
+        resource_id="config.json",
+        user_id=admin.user_id,
+        user_name=admin.user_name,
+        user_role=admin.user_role,
+        ip_address=client_ip(request),
+        details={
+            "provider": payload["provider"],
+            "model": payload["openai_model"],
+            "base_url": payload["openai_base_url"],
+            "yandex_folder_id": payload["yandex_folder_id"],
+            "prompt_override_len": len(payload["system_prompt_override"]),
+            "changed_keys": changed_keys,
+        },
+    )
     logger.info(
         "Runtime config updated by user_id=%s role=%s: provider=%s model=%s",
         admin.user_id,

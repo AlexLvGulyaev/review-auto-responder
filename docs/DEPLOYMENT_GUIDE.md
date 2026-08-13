@@ -52,6 +52,7 @@ cp .env.example .env
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_USER_CHAT_ID` | нет | Уведомления оператору (без них — пропуск) |
 | `APP_PORT` | нет | Порт сайта на хосте (по умолчанию `8000`) |
 | `WORKER_POLL_INTERVAL` | нет | Интервал опроса, сек (по умолчанию `10`) |
+| `LOG_LEVEL` | нет | Уровень stdout-логирования обоих сервисов (`DEBUG`/`INFO`/`WARNING`/...; по умолчанию `INFO`) |
 
 > ⚠️ **Минимум для запуска:** БД-переменные + `WORKER_API_TOKEN` + `ADMIN_TOKEN` + `ADMIN_DEMO_TOKEN`. Без LLM-ключа воркер уйдёт в fallback (словарные шаблоны) — система отвечает, но без нейросети.
 
@@ -186,6 +187,39 @@ curl -s -o /dev/null -w "%{http_code}\n" -X POST http://localhost:8000/admin \
 ```
 
 Ожидаемый результат: `200` или `302` (редирект на `?saved=1`).
+
+### 🖥️ 5.4. Панели observability (`/admin/executions`, `/admin/audit`)
+
+В `/admin` есть две дополнительные read-only панели (доступны и admin-, и
+demo-токеном — только просмотр):
+
+- **`/admin/executions`** — трейсы обработки отзывов: каждая обработка = сессия
+  со статусом (`ok`/`error`/`started`), провайдером, моделью, длительностью и
+  шагами пайплайна. Шаг `llm_call` несёт `{provider, model, latency_ms, tokens, fallback_reason}`.
+- **`/admin/audit`** — журнал admin/security-событий: входы в `/admin`, смена
+  конфига, RBAC-отказы, отказы `X-Worker-Token`.
+
+```bash
+# Оставьте отзыв (§4.1), дождитесь обработки, затем:
+curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8000/admin/executions
+# Ожидается: 200 (HTML-таблица сессий; с demo-токеном через cookie — тот же результат)
+```
+
+> 📌 События в `/admin/audit` появляются при входе в админку, смене конфига и
+> отказах авторизации. Просмотры самих панелей **не** создают audit-записей.
+
+### 🖥️ 5.5. Уровень логирования
+
+`LOG_LEVEL` управляет stdout-логированием обоих сервисов. Для диагностики:
+
+```bash
+LOG_LEVEL=DEBUG docker compose up -d --build
+docker compose logs -f review-worker
+```
+
+Шумные логгеры `httpx`/`openai` приглушены до `WARNING` (спам опроса
+`GET /api/reviews?status=new` каждые `WORKER_POLL_INTERVAL` сек убран; ошибки
+остаются видны).
 
 ---
 

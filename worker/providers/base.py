@@ -9,7 +9,13 @@ class ResponseProvider(ABC):
     Унификация на Chat Completions (общий знаменатель OpenAI/GigaChat/Yandex).
     Legacy использовал OpenAI `responses.create` — доработка переводит все
     провайдеры на Chat Completions ради единой абстракции.
+
+    `model_name` — имя модели для observability/execution-трассировки.
+    `last_usage` — количество токенов последнего запроса (None, если провайдер
+    не вернул usage); обновляется в `generate`.
     """
+
+    last_usage: int | None = None
 
     @abstractmethod
     async def generate(self, system_prompt: str, user_text: str) -> str:
@@ -19,4 +25,9 @@ class ResponseProvider(ABC):
     @property
     @abstractmethod
     def name(self) -> str:
+        raise NotImplementedError
+
+    @property
+    @abstractmethod
+    def model_name(self) -> str:
         raise NotImplementedError

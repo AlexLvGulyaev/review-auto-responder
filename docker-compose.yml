@@ -36,6 +36,7 @@ services:
       ADMIN_TOKEN: ${ADMIN_TOKEN}
       ADMIN_DEMO_TOKEN: ${ADMIN_DEMO_TOKEN}
       ADMIN_AUTH_ENABLED: ${ADMIN_AUTH_ENABLED:-true}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
     env_file:
       - .env
     ports:
@@ -73,6 +74,7 @@ services:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_USER_CHAT_ID: ${TELEGRAM_USER_CHAT_ID:-}
       WORKER_HEALTHCHECK_MAX_AGE: ${WORKER_HEALTHCHECK_MAX_AGE:-60}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
     env_file:
       - .env
     volumes:

@@ -27,11 +27,12 @@
 | 🤖 **Мультипровайдерность** | OpenAI / GigaChat (Сбер) / YandexGPT / «Свой» — через единую абстракцию Chat Completions |
 | 🎛️ **Смена провайдера без рестарта** | Операторская панель `/admin`: провайдер, модель, base_url, промпт — применяются на следующем цикле опроса |
 | 📝 **Промпт в файле** | `prompts/v1/system.md` вместо хардкода; override через `/admin` |
-| 🔐 **Демо-RBAC админки** | Два токена: полный (`ADMIN_TOKEN`) и read-only демо (`ADMIN_DEMO_TOKEN`) — стандартный демо-сценарий APL |
+| 🔐 **Демо-RBAC админки** | Два токена: полный (`ADMIN_TOKEN`) и read-only демо (`ADMIN_DEMO_TOKEN`) — backend-guard на мутации |
 | 🏷️ **Тональность без LLM** | Словарный классификатор — экономия токенов и предсказуемость |
 | 🔁 **Защита от self-reply** | Воркер не отвечает на собственные ответы — бесконечный цикл исключён |
 | 📣 **Telegram-уведомления** | Оператор получает каждый новый отзыв с тоном и текстом |
 | 🛡️ **Fallback** | Система отвечает даже без ключа/при сбое API |
+| 📊 **Observability** | Три контура: stdout-логи (`LOG_LEVEL`), execution-трейсы обработки (`/admin/executions`), журнал аудита (`/admin/audit`) |
 | 🚀 **Единый compose** | `docker compose up --build -d` поднимает БД + сайт + воркер |
 
 ---
@@ -71,7 +72,22 @@ docker compose up -d --build
 
 ---
 
-## 📚 6. Документация
+## 📊 6. Observability — три контура
+
+| Контур | Носитель | Назначение | Просмотр |
+|--------|----------|-----------|----------|
+| **stdout-логирование** | `docker compose logs` | Этапы обработки, сбои провайдера; уровень через `LOG_LEVEL` | логи сервисов |
+| **Execution tracing** | БД (`execution_sessions` + `execution_steps`) | Трасса пайплайна каждого отзыва: статус, провайдер/модель, длительность, LLM-метрики (latency/tokens/fallback_reason) | `/admin/executions` |
+| **Audit** | БД (`audit_logs`) | Журнал admin/security-событий: входы в `/admin`, смена конфига, RBAC-отказы, отказы `X-Worker-Token` | `/admin/audit` |
+
+Панели `/admin/executions` и `/admin/audit` — read-only, доступны и admin-, и
+demo-токеном. Подробно — [🏗️ ARCHITECTURE.md §7](docs/ARCHITECTURE.md),
+[🛡️ SECURITY_NOTES.md §6–7](docs/SECURITY_NOTES.md),
+[🔌 API_CONTRACT.md §3–4](docs/API_CONTRACT.md).
+
+---
+
+## 📚 7. Документация
 
 - [🏗️ `docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — архитектура и путь данных.
 - [📋 `docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) — технический план.
@@ -83,7 +99,7 @@ docker compose up -d --build
 
 ---
 
-## 📂 7. Структура проекта
+## 📂 8. Структура проекта
 
 ```
 .
@@ -91,13 +107,16 @@ docker compose up -d --build
 ├── .env.example                # Переменные окружения (заполнить → .env)
 ├── site/                       # Сайт отзывов (FastAPI + PostgreSQL)
 │   └── app/
-│       ├── api/                # routes.py (отзывы) + admin.py (/admin, демо-RBAC)
-│       ├── models/             # Review (самоссылка parent_id)
-│       ├── templates/          # index, admin, admin_login
+│       ├── api/                # routes, admin, executions, audit, worker_auth
+│       ├── models/             # Review, ExecutionSession/Step, AuditLog
+│       ├── services/           # AuditService (журнал аудита)
+│       ├── core/               # configure_logging (контур 1)
+│       ├── templates/          # index, admin, admin_login, executions, audit
 │       └── ...
 ├── worker/                     # Автономный обработчик
-│   ├── worker.py               # Основной цикл + heartbeat
+│   ├── worker.py               # Основной цикл + execution-сессии + heartbeat
 │   ├── processor.py            # detect_tone + generate_response + fallback
+│   ├── client.py               # httpx-клиент к API сайта (rev. + executions)
 │   ├── providers/              # openai / gigachat / yandex / factory
 │   ├── prompts/v1/system.md    # Системный промпт (SOT текста)
 │   └── ...
@@ -106,8 +125,9 @@ docker compose up -d --build
 
 ---
 
-## 📝 8. История
+## 📝 9. История
 
 | Дата | Версия | Изменение |
 |------|--------|-----------|
 | 2026-08-13 | 1.0 | Доработка legacy: мультипровайдерность, `/admin` runtime-config, промпт-в-файле, единый compose, демо-RBAC, `/health`, Deployment Validation |
+| 2026-08-13 | 1.1 | Observability: три контура — stdout-логирование (`LOG_LEVEL`), execution-tracing (`/admin/executions`), аудит (`/admin/audit`); LLM-метрики в трассах |

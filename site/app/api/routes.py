@@ -1,21 +1,22 @@
+import logging
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import get_settings
 from app.db.session import get_db_session
 from app.models.review import Review, ReviewStatus
+from app.api.worker_auth import require_worker_token
 from app.schemas import ReviewCreate, ReviewRead, ReviewUpdate
 
 
+logger = logging.getLogger(__name__)
 BASE_DIR = Path(__file__).resolve().parents[2]
 templates = Jinja2Templates(directory=str(BASE_DIR / "app" / "templates"))
 router = APIRouter()
-settings = get_settings()
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -51,6 +52,7 @@ async def list_reviews(
 
 @router.post("/api/reviews", response_model=ReviewRead, status_code=status.HTTP_201_CREATED)
 async def create_review(
+    request: Request,
     payload: ReviewCreate,
     session: AsyncSession = Depends(get_db_session),
 ) -> Review:
@@ -71,6 +73,14 @@ async def create_review(
     session.add(review)
     await session.commit()
     await session.refresh(review)
+    logger.info(
+        "review.create id=%s parent=%s author=%r len=%d ip=%s",
+        review.id,
+        review.parent_id,
+        review.name,
+        len(review.text),
+        request.client.host if request.client else None,
+    )
     return review
 
 
@@ -78,12 +88,10 @@ async def create_review(
 async def update_review(
     review_id: int,
     payload: ReviewUpdate,
+    request: Request,
     session: AsyncSession = Depends(get_db_session),
-    x_worker_token: str | None = Header(default=None),
+    _token: str = Depends(require_worker_token),
 ) -> Review:
-    if x_worker_token != settings.worker_api_token:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid worker token.")
-
     review = await session.get(Review, review_id)
     if review is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Review not found.")
@@ -97,4 +105,10 @@ async def update_review(
 
     await session.commit()
     await session.refresh(review)
+    logger.info(
+        "review.update id=%s status=%s tone=%s",
+        review.id,
+        review.status,
+        review.tone,
+    )
     return review
