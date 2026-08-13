@@ -1,119 +1,178 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Админка · Review Auto Responder</title>
-  <style>
-    :root { color-scheme: light; --bg:#f3f5f7; --card:#fff; --text:#17202a; --muted:#5c6b7a; --border:#d7dde4; --accent:#1f6feb; --accent-hover:#1558b0; --success:#1a7f37; --warn:#9a6700; }
-    * { box-sizing: border-box; }
-    body { margin:0; font-family:"Segoe UI",Tahoma,sans-serif; background:var(--bg); color:var(--text); }
-    .container { width:min(820px, calc(100% - 32px)); margin:0 auto; padding:32px 0 48px; }
-    .card { background:var(--card); border:1px solid var(--border); border-radius:18px; padding:28px; box-shadow:0 12px 35px rgba(15,23,42,.06); }
-    header { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; gap:12px; flex-wrap:wrap; }
-    h1 { margin:0; font-size:24px; }
-    .badge { display:inline-flex; align-items:center; gap:6px; border-radius:999px; padding:5px 12px; font-size:13px; font-weight:600; }
-    .badge.demo { color:var(--warn); background:rgba(154,103,0,.12); }
-    .badge.admin { color:var(--success); background:rgba(26,127,55,.12); }
-    .top-actions a { font-size:13px; color:var(--muted); text-decoration:none; margin-left:12px; }
-    form { display:grid; gap:18px; }
-    .field { display:grid; gap:6px; }
-    label { font-size:13px; color:var(--muted); font-weight:600; }
-    .field .desc { font-size:12px; color:var(--muted); }
-    input, select, textarea { width:100%; border:1px solid var(--border); border-radius:12px; padding:11px 14px; font:inherit; background:#fff; color:var(--text); }
-    textarea { min-height:160px; resize:vertical; font-family:inherit; }
-    input:focus, select:focus, textarea:focus { outline:2px solid rgba(31,111,235,.15); border-color:var(--accent); }
-    input:disabled, select:disabled, textarea:disabled { background:#f3f5f7; color:var(--muted); cursor:not-allowed; }
-    .row { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
-    .actions { display:flex; gap:12px; align-items:center; margin-top:8px; }
-    button.save { border:0; border-radius:12px; padding:12px 22px; background:var(--accent); color:#fff; font:inherit; font-weight:600; cursor:pointer; }
-    button.save:hover:not(:disabled) { background:var(--accent-hover); }
-    button.save:disabled { opacity:.55; cursor:not-allowed; }
-    .alert { padding:10px 14px; border-radius:12px; font-size:14px; }
-    .alert.ok { color:var(--success); background:rgba(26,127,55,.1); }
-    .alert.demo { color:var(--warn); background:rgba(154,103,0,.1); }
-    .logout { border:1px solid var(--border); border-radius:12px; padding:11px 16px; background:#fff; color:var(--text); font:inherit; cursor:pointer; text-decoration:none; }
-    .tabs { display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap; }
-    .tabs a { font-size:13px; color:var(--muted); text-decoration:none; border:1px solid var(--border); border-radius:10px; padding:7px 14px; background:#fff; }
-    .tabs a.active, .tabs a:hover { color:var(--accent); border-color:var(--accent); }
-    @media (max-width:640px){ .row{ grid-template-columns:1fr; } }
-  </style>
-</head>
-<body>
-  <main class="container">
-    <section class="card">
-      <header>
-        <h1>Runtime-конфиг обработчика</h1>
-        <div class="top-actions">
-          {% if is_demo %}
-            <span class="badge demo">👁 Демо-режим: только просмотр</span>
-          {% else %}
-            <span class="badge admin">🛠 Администратор</span>
-          {% endif %}
-          <a href="/">на сайт</a>
-        </div>
-      </header>
+{% extends "admin_base.html" %}
 
-      <nav class="tabs">
-        <a href="/admin" class="active">Конфиг</a>
-        <a href="/admin/executions">Трейсы обработки</a>
-        <a href="/admin/audit">Аудит</a>
-      </nav>
+{% block title %}Конфигурация · Админка{% endblock %}
+{% block page_title %}Конфиг-консоль{% endblock %}
+{% block page_subtitle %}Настройки провайдеров, системный промпт (файл-SOT) и состояние системы{% endblock %}
 
-      {% if is_demo %}
-        <div class="alert demo">Вы вошли в демо-режим. Просмотр разрешён, изменение конфигурации заблокировано на backend (POST /admin → 403).</div>
-      {% elif saved %}
-        <div class="alert ok">✓ Конфигурация сохранена. Обработчик применит её на следующем цикле опроса без рестарта.</div>
+{% block content %}
+
+{# ── Состояние системы (ридонли) ────────────────────────────────────────── #}
+<section class="ai-card">
+  <h2 class="ai-card__title">Состояние системы</h2>
+  <p class="ai-card__hint">Живые пробы: БД, воркер, провайдеры. Метрики из БД. Read-only.</p>
+
+  <div class="ai-grid ai-grid--3" style="margin-bottom:12px;">
+    <div class="ai-metric">
+      <div class="ai-metric__label">Общий статус</div>
+      <div class="ai-metric__value">
+        {% if status.overall == 'ok' %}
+          <span class="ai-status ai-status--ok">ok</span>
+        {% else %}
+          <span class="ai-status ai-status--warning">degraded</span>
+        {% endif %}
+      </div>
+    </div>
+    <div class="ai-metric">
+      <div class="ai-metric__label">База данных</div>
+      <div class="ai-metric__value">
+        {% set db = status.components.database %}
+        {% if db.status == 'ok' %}
+          <span class="ai-status ai-status--ok">ok</span>
+        {% else %}
+          <span class="ai-status ai-status--error">error</span>
+        {% endif %}
+      </div>
+      <div class="ai-metric__note">{{ db.latency_ms }} мс{% if db.detail %} · {{ db.detail }}{% endif %}</div>
+    </div>
+    <div class="ai-metric">
+      <div class="ai-metric__label">Воркер</div>
+      <div class="ai-metric__value">
+        {% if not status.worker.available %}
+          <span class="ai-status ai-status--muted">нет данных</span>
+        {% elif status.worker.worker_alive %}
+          <span class="ai-status ai-status--ok">alive</span>
+        {% else %}
+          <span class="ai-status ai-status--warning">не отвечает</span>
+        {% endif %}
+      </div>
+      <div class="ai-metric__note">
+        {% if status.worker.available %}
+          обновлён {{ status.worker.age_seconds }}с назад · провайдер: {{ status.worker.current_provider or '—' }}
+        {% else %}
+          status.json отсутствует — воркер ещё не писал или не запущен
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  {# Метрики #}
+  <div class="ai-grid ai-grid--5" style="margin-bottom:12px;">
+    <div class="ai-metric"><div class="ai-metric__label">Отзывы new</div><div class="ai-metric__value">{{ status.db_metrics.reviews.new }}</div></div>
+    <div class="ai-metric"><div class="ai-metric__label">Отзывы processed</div><div class="ai-metric__value">{{ status.db_metrics.reviews.processed }}</div></div>
+    <div class="ai-metric"><div class="ai-metric__label">Трейсы ok</div><div class="ai-metric__value">{{ status.db_metrics.executions.ok }}</div></div>
+    <div class="ai-metric"><div class="ai-metric__label">Трейсы error</div><div class="ai-metric__value">{{ status.db_metrics.executions.error }}</div></div>
+    <div class="ai-metric"><div class="ai-metric__label">Аудит-записи</div><div class="ai-metric__value">{{ status.db_metrics.audit_count }}</div></div>
+  </div>
+
+  {# Провайдеры + последний запуск #}
+  <div class="ai-grid ai-grid--2">
+    <div>
+      <div class="ai-metric__label" style="margin-bottom:6px;">Провайдеры (сконфигурированы)</div>
+      <div class="ai-chips">
+        {% set provs = status.worker.providers if status.worker.available else {} %}
+        <span class="ai-chip {% if provs.get('openai') %}ok{% else %}skipped{% endif %}">OpenAI: {% if provs.get('openai') %}да{% else %}нет{% endif %}</span>
+        <span class="ai-chip {% if provs.get('gigachat') %}ok{% else %}skipped{% endif %}">GigaChat: {% if provs.get('gigachat') %}да{% else %}нет{% endif %}</span>
+        <span class="ai-chip {% if provs.get('yandex') %}ok{% else %}skipped{% endif %}">Yandex: {% if provs.get('yandex') %}да{% else %}нет{% endif %}</span>
+      </div>
+      <div class="ai-metric__label" style="margin:10px 0 4px;">Текущий применённый конфиг</div>
+      <dl class="ai-kv">
+        <dt>provider</dt><dd>{{ status.current_config.provider or '—' }}</dd>
+        <dt>model</dt><dd>{{ status.current_config.model or '—' }}</dd>
+        <dt>base_url</dt><dd>{{ status.current_config.base_url or '—' }}</dd>
+        <dt>prompt</dt><dd>{{ status.current_config.prompt.size }} байт{% if status.current_config.prompt.mtime %} · {{ status.current_config.prompt.mtime[:19] }}{% endif %}</dd>
+      </dl>
+    </div>
+    <div>
+      <div class="ai-metric__label" style="margin-bottom:6px;">Последняя сессия обработки</div>
+      {% if status.db_metrics.last_session %}
+        <dl class="ai-kv">
+          <dt>сессия</dt><dd>#{{ status.db_metrics.last_session.id }} · <span class="ai-chip {{ status.db_metrics.last_session.status }}">{{ status.db_metrics.last_session.status }}</span></dd>
+          <dt>провайдер / модель</dt><dd>{{ status.db_metrics.last_session.provider_key or '—' }} / {{ status.db_metrics.last_session.model_name or '—' }}</dd>
+          <dt>длительность</dt><dd>{{ status.db_metrics.last_session.duration_ms if status.db_metrics.last_session.duration_ms is not none else '—' }} мс</dd>
+          <dt>финал</dt><dd class="muted">{{ status.db_metrics.last_session.finished_at[:19] if status.db_metrics.last_session.finished_at else '—' }}</dd>
+        </dl>
+      {% else %}
+        <div class="ai-empty">Сессий обработки пока нет.</div>
       {% endif %}
 
-      <form method="post" action="/admin">
-        <div class="row">
-          <div class="field">
-            <label for="provider">Провайдер</label>
-            <select id="provider" name="provider" {{ 'disabled' if is_demo }}>
-              <option value="openai"   {{ 'selected' if config.provider == 'openai' }}>OpenAI</option>
-              <option value="gigachat" {{ 'selected' if config.provider == 'gigachat' }}>GigaChat (Сбер)</option>
-              <option value="yandex"   {{ 'selected' if config.provider == 'yandex' }}>YandexGPT</option>
-              <option value="custom"   {{ 'selected' if config.provider == 'custom' }}>Свой (OpenAI-compatible)</option>
-            </select>
-            <span class="desc">Смена применяется в runtime — без рестарта обработчика. Ключи провайдеров хранятся в <code>.env</code> обработчика, не здесь.</span>
-          </div>
-          <div class="field">
-            <label for="openai_model">Модель</label>
-            <input id="openai_model" name="openai_model" value="{{ config.openai_model }}" {{ 'disabled' if is_demo }}>
-            <span class="desc">Для Yandex: <code>gpt://&lt;folder_id&gt;/yandexgpt/latest</code></span>
-          </div>
-        </div>
+      {% if status.db_metrics.recent_errors %}
+      <div class="ai-metric__label" style="margin:10px 0 4px;">Последние ошибки</div>
+      <table class="ai-table">
+        <thead><tr><th>ID</th><th>Отзыв</th><th>Ошибка</th></tr></thead>
+        <tbody>
+        {% for e in status.db_metrics.recent_errors %}
+          <tr>
+            <td class="id"><a href="/admin/executions/{{ e.id }}">#{{ e.id }}</a></td>
+            <td class="id">{{ e.review_id or '—' }}</td>
+            <td class="muted">{{ e.error or '—' }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+    </div>
+  </div>
+</section>
 
-        <div class="row">
-          <div class="field">
-            <label for="openai_base_url">Base URL (для «Свой» / OpenAI)</label>
-            <input id="openai_base_url" name="openai_base_url" value="{{ config.openai_base_url }}" {{ 'disabled' if is_demo }}>
-            <span class="desc">Для GigaChat/Yandex игнорируется (пресет в коде).</span>
-          </div>
-          <div class="field">
-            <label for="yandex_folder_id">Yandex folder_id</label>
-            <input id="yandex_folder_id" name="yandex_folder_id" value="{{ config.yandex_folder_id }}" {{ 'disabled' if is_demo }}>
-            <span class="desc">Не секрет — каталог Yandex Cloud. Пусто для не-Yandex.</span>
-          </div>
-        </div>
+{# ── Алерты ─────────────────────────────────────────────────────────────── #}
+{% if is_demo %}
+  <div class="ai-alert ai-alert--demo">Демо-режим. Просмотр разрешён, изменение конфигурации заблокировано на backend (POST /admin → 403).</div>
+{% elif saved %}
+  <div class="ai-alert ai-alert--ok">✓ Конфигурация сохранена. Обработчик применит её на следующем цикле опроса без рестарта.</div>
+{% endif %}
 
-        <div class="field">
-          <label for="system_prompt_override">Override системного промпта</label>
-          <textarea id="system_prompt_override" name="system_prompt_override" {{ 'disabled' if is_demo }} placeholder="Оставьте пустым — используется файл prompts/v1/system.md">{{ config.system_prompt_override }}</textarea>
-          <span class="desc">Если заполнено — переопределяет <code>prompts/v1/system.md</code> обработчика. Применяется на следующем цикле.</span>
-        </div>
+{# ── Форма конфигурации ─────────────────────────────────────────────────── #}
+<section class="ai-card">
+  <h2 class="ai-card__title">Настройки обработчика</h2>
+  <p class="ai-card__hint">Секреты (ключи провайдеров) хранятся в <code>.env</code> обработчика, не здесь. Смена применяется в runtime — без рестарта.</p>
 
-        <div class="actions">
-          {% if is_demo %}
-            <button type="submit" class="save" disabled title="Демо-режим: только просмотр">Сохранить (demo read-only)</button>
-          {% else %}
-            <button type="submit" class="save">Сохранить</button>
-          {% endif %}
-          <a class="logout" href="/admin/logout">Выйти</a>
-        </div>
-      </form>
-    </section>
-  </main>
-</body>
-</html>
+  <form class="ai-form" method="post" action="/admin">
+    <div class="ai-row">
+      <div class="ai-field">
+        <label for="provider">Провайдер</label>
+        <select id="provider" name="provider" {{ 'disabled' if is_demo }}>
+          <option value="openai"   {{ 'selected' if config.provider == 'openai' }}>OpenAI</option>
+          <option value="gigachat" {{ 'selected' if config.provider == 'gigachat' }}>GigaChat (Сбер)</option>
+          <option value="yandex"   {{ 'selected' if config.provider == 'yandex' }}>YandexGPT</option>
+          <option value="custom"   {{ 'selected' if config.provider == 'custom' }}>Свой (OpenAI-compatible)</option>
+        </select>
+        <span class="desc">Активный LLM-провайдер.</span>
+      </div>
+      <div class="ai-field">
+        <label for="openai_model">Модель</label>
+        <input class="ai-input" id="openai_model" name="openai_model" value="{{ config.openai_model }}" {{ 'disabled' if is_demo }}>
+        <span class="desc">Для Yandex: <code>gpt://&lt;folder_id&gt;/yandexgpt/latest</code></span>
+      </div>
+    </div>
+
+    <div class="ai-row">
+      <div class="ai-field">
+        <label for="openai_base_url">Base URL (для «Свой» / OpenAI)</label>
+        <input class="ai-input" id="openai_base_url" name="openai_base_url" value="{{ config.openai_base_url }}" {{ 'disabled' if is_demo }}>
+        <span class="desc">Для GigaChat/Yandex игнорируется (пресет в коде).</span>
+      </div>
+      <div class="ai-field">
+        <label for="yandex_folder_id">Yandex folder_id</label>
+        <input class="ai-input" id="yandex_folder_id" name="yandex_folder_id" value="{{ config.yandex_folder_id }}" {{ 'disabled' if is_demo }}>
+        <span class="desc">Не секрет — каталог Yandex Cloud. Пусто для не-Yandex.</span>
+      </div>
+    </div>
+
+    <div class="ai-field">
+      <label for="system_prompt">Системный промпт (файл-SOT)</label>
+      <textarea class="ai-textarea" id="system_prompt" name="system_prompt" {{ 'disabled' if is_demo }} placeholder="Текст системного промпта обработчика">{{ prompt_text }}</textarea>
+      <span class="desc">Файл — единственный SOT промпта. Сохранение перезаписывает <code>system_prompt.md</code> на shared volume; обработчик применит новый промпт на следующем цикле (hot-reload по mtime).</span>
+    </div>
+
+    <div class="ai-actions">
+      {% if is_demo %}
+        <button type="submit" class="ai-btn" disabled title="Демо-режим: только просмотр">Сохранить (demo read-only)</button>
+      {% else %}
+        <button type="submit" class="ai-btn">Сохранить</button>
+      {% endif %}
+      <a class="ai-btn ai-btn--secondary ai-btn--small" href="/admin/status" target="_blank">JSON-статус</a>
+    </div>
+  </form>
+</section>
+
+{% endblock %}

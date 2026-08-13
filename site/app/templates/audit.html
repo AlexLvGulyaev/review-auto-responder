@@ -1,117 +1,70 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Аудит · Review Auto Responder</title>
-  <style>
-    :root { color-scheme: light; --bg:#f3f5f7; --card:#fff; --text:#17202a; --muted:#5c6b7a; --border:#d7dde4; --accent:#1f6feb; --success:#1a7f37; --warn:#9a6700; --error:#cf222e; }
-    * { box-sizing: border-box; }
-    body { margin:0; font-family:"Segoe UI",Tahoma,sans-serif; background:var(--bg); color:var(--text); }
-    .container { width:min(980px, calc(100% - 32px)); margin:0 auto; padding:32px 0 48px; }
-    .card { background:var(--card); border:1px solid var(--border); border-radius:18px; padding:28px; box-shadow:0 12px 35px rgba(15,23,42,.06); }
-    header { display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; gap:12px; flex-wrap:wrap; }
-    h1 { margin:0; font-size:22px; }
-    .nav { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:18px; }
-    .nav a { font-size:13px; color:var(--muted); text-decoration:none; border:1px solid var(--border); border-radius:10px; padding:7px 13px; background:#fff; }
-    .nav a.active, .nav a:hover { color:var(--accent); border-color:var(--accent); }
-    .muted { color:var(--muted); font-size:13px; }
-    form.filters { display:grid; grid-template-columns:repeat(5, 1fr); gap:12px; margin-bottom:20px; }
-    .field { display:grid; gap:4px; }
-    label { font-size:12px; color:var(--muted); font-weight:600; }
-    input, select { width:100%; border:1px solid var(--border); border-radius:10px; padding:9px 12px; font:inherit; background:#fff; color:var(--text); }
-    .filter-actions { grid-column:1 / -1; display:flex; gap:10px; }
-    .btn { border:1px solid var(--border); border-radius:10px; padding:9px 16px; background:#fff; color:var(--text); font:inherit; cursor:pointer; text-decoration:none; }
-    .btn.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
-    table { width:100%; border-collapse:collapse; font-size:13px; }
-    th, td { text-align:left; padding:9px 10px; border-bottom:1px solid var(--border); vertical-align:top; }
-    th { color:var(--muted); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.03em; }
-    tr:hover td { background:rgba(31,111,235,.03); }
-    td.id { font-variant-numeric:tabular-nums; }
-    td a { color:var(--accent); text-decoration:none; font-weight:600; }
-    .badge { display:inline-flex; border-radius:999px; padding:3px 10px; font-size:12px; font-weight:600; }
-    .badge.deny { color:var(--error); background:rgba(207,34,46,.12); }
-    .badge.ok { color:var(--success); background:rgba(26,127,55,.12); }
-    .badge.info { color:var(--muted); background:rgba(92,107,122,.12); }
-    .empty { padding:32px; text-align:center; color:var(--muted); }
-    .pager { display:flex; justify-content:space-between; align-items:center; margin-top:16px; }
-    @media (max-width:760px){ form.filters{ grid-template-columns:1fr 1fr; } .filter-actions{ grid-column:1 / -1; } }
-  </style>
-</head>
-<body>
-  <main class="container">
-    <section class="card">
-      <header>
-        <h1>Журнал аудита</h1>
-        <span class="muted">Всего: {{ total }}</span>
-      </header>
+{% extends "admin_base.html" %}
 
-      <nav class="nav">
-        <a href="/admin">Конфиг</a>
-        <a href="/admin/executions">Трейсы</a>
-        <a href="/admin/audit" class="active">Аудит</a>
-        <a href="/">на сайт</a>
-      </nav>
+{% block title %}Аудит · Админка{% endblock %}
+{% block page_title %}Журнал аудита{% endblock %}
+{% block page_subtitle %}Admin/security-события: входы, смена конфига, RBAC-отказы{% endblock %}
 
-      <form method="get" action="/admin/audit" class="filters">
-        <div class="field"><label>action</label><input name="action" value="{{ filters.action or '' }}" placeholder="admin.config_update"></div>
-        <div class="field"><label>resource_type</label><input name="resource_type" value="{{ filters.resource_type or '' }}" placeholder="runtime_config"></div>
-        <div class="field"><label>user_id / name</label><input name="user_id" value="{{ filters.user_id or '' }}" placeholder="admin"></div>
-        <div class="field"><label>date_from</label><input type="date" name="date_from" value="{{ filters.date_from or '' }}"></div>
-        <div class="field"><label>date_to</label><input type="date" name="date_to" value="{{ filters.date_to or '' }}"></div>
-        <div class="filter-actions">
-          <button type="submit" class="btn primary">Применить</button>
-          <a class="btn" href="/admin/audit">Сбросить</a>
-        </div>
-      </form>
+{% block content %}
+<section class="ai-card">
+  <p class="ai-card__hint">Всего: {{ total }}</p>
 
-      {% if entries %}
-      <table>
-        <thead>
-          <tr><th>ID</th><th>Действие</th><th>Ресурс</th><th>Пользователь</th><th>IP</th><th>Время</th></tr>
-        </thead>
-        <tbody>
-        {% for e in entries %}
-          <tr>
-            <td class="id"><a href="/admin/audit/{{ e.id }}">#{{ e.id }}</a></td>
-            <td>
-              {% if e.action in ('admin.rbac_denied', 'admin.login_failed', 'auth.worker_denied') %}
-                <span class="badge deny">{{ e.action }}</span>
-              {% elif e.action in ('admin.login_success', 'admin.config_update') %}
-                <span class="badge ok">{{ e.action }}</span>
-              {% else %}
-                <span class="badge info">{{ e.action }}</span>
-              {% endif %}
-            </td>
-            <td>{{ e.resource_type }}{% if e.resource_id %}<span class="muted">/{{ e.resource_id }}</span>{% endif %}</td>
-            <td>{{ e.user_name or e.user_id or '—' }}{% if e.user_role %}<span class="muted"> · {{ e.user_role }}</span>{% endif %}</td>
-            <td class="id">{{ e.ip_address or '—' }}</td>
-            <td class="muted">{{ e.created_at.strftime('%Y-%m-%d %H:%M:%S') if e.created_at else '—' }}</td>
-          </tr>
-        {% endfor %}
-        </tbody>
-      </table>
+  <form method="get" action="/admin/audit" class="ai-filters">
+    <div class="ai-field"><label>action</label><input class="ai-input" name="action" value="{{ filters.action or '' }}" placeholder="admin.config_update"></div>
+    <div class="ai-field"><label>resource_type</label><input class="ai-input" name="resource_type" value="{{ filters.resource_type or '' }}" placeholder="runtime_config"></div>
+    <div class="ai-field"><label>user_id / name</label><input class="ai-input" name="user_id" value="{{ filters.user_id or '' }}" placeholder="admin"></div>
+    <div class="ai-field"><label>date_from</label><input class="ai-input" type="date" name="date_from" value="{{ filters.date_from or '' }}"></div>
+    <div class="ai-field"><label>date_to</label><input class="ai-input" type="date" name="date_to" value="{{ filters.date_to or '' }}"></div>
+    <div class="filter-actions">
+      <button type="submit" class="ai-btn ai-btn--small">Применить</button>
+      <a class="ai-btn ai-btn--secondary ai-btn--small" href="/admin/audit">Сбросить</a>
+    </div>
+  </form>
 
-      <div class="pager">
-        <span class="muted">Показано {{ entries|length }} из {{ total }} (offset {{ offset }})</span>
-        <span>
-          {% set pairs = [] %}
-          {% for k, v in request.query_params.multi_items() if k != 'offset' %}
-            {% set _ = pairs.append((k, v)) %}
-          {% endfor %}
-          {% set qs = pairs | urlencode %}
-          {% if offset > 0 %}
-            <a class="btn" href="/admin/audit?{{ qs }}&offset={{ max(0, offset - limit) }}">← Назад</a>
+  {% if entries %}
+  <table class="ai-table">
+    <thead>
+      <tr><th>ID</th><th>Действие</th><th>Ресурс</th><th>Пользователь</th><th>IP</th><th>Время</th></tr>
+    </thead>
+    <tbody>
+    {% for e in entries %}
+      <tr>
+        <td class="id"><a href="/admin/audit/{{ e.id }}">#{{ e.id }}</a></td>
+        <td>
+          {% if e.action in ('admin.rbac_denied', 'admin.login_failed', 'auth.worker_denied') %}
+            <span class="ai-chip error">{{ e.action }}</span>
+          {% elif e.action in ('admin.login_success', 'admin.config_update') %}
+            <span class="ai-chip ok">{{ e.action }}</span>
+          {% else %}
+            <span class="ai-chip skipped">{{ e.action }}</span>
           {% endif %}
-          {% if offset + limit < total %}
-            <a class="btn" href="/admin/audit?{{ qs }}&offset={{ offset + limit }}">Вперёд →</a>
-          {% endif %}
-        </span>
-      </div>
-      {% else %}
-        <div class="empty">Записей аудита нет. События появляются при входе в админку, смене конфига и отказах авторизации.</div>
+        </td>
+        <td>{{ e.resource_type }}{% if e.resource_id %}<span class="muted">/{{ e.resource_id }}</span>{% endif %}</td>
+        <td>{{ e.user_name or e.user_id or '—' }}{% if e.user_role %}<span class="muted"> · {{ e.user_role }}</span>{% endif %}</td>
+        <td class="id">{{ e.ip_address or '—' }}</td>
+        <td class="muted">{{ e.created_at.strftime('%Y-%m-%d %H:%M:%S') if e.created_at else '—' }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="ai-pager">
+    <span>Показано {{ entries|length }} из {{ total }} (offset {{ offset }})</span>
+    <span>
+      {% set pairs = [] %}
+      {% for k, v in request.query_params.multi_items() if k != 'offset' %}
+        {% set _ = pairs.append((k, v)) %}
+      {% endfor %}
+      {% set qs = pairs | urlencode %}
+      {% if offset > 0 %}
+        <a class="ai-btn ai-btn--secondary ai-btn--small" href="/admin/audit?{{ qs }}&offset={{ max(0, offset - limit) }}">← Назад</a>
       {% endif %}
-    </section>
-  </main>
-</body>
-</html>
+      {% if offset + limit < total %}
+        <a class="ai-btn ai-btn--secondary ai-btn--small" href="/admin/audit?{{ qs }}&offset={{ offset + limit }}">Вперёд →</a>
+      {% endif %}
+    </span>
+  </div>
+  {% else %}
+    <div class="ai-empty">Записей аудита нет. События появляются при входе в админку, смене конфига и отказах авторизации.</div>
+  {% endif %}
+</section>
+{% endblock %}

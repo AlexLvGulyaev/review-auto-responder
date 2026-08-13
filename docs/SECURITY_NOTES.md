@@ -18,7 +18,7 @@
 | `YANDEX_API_KEY` | `.env` | Провайдер YandexGPT |
 | `TELEGRAM_BOT_TOKEN` | `.env` | Уведомления оператору |
 
-> ⚠️ **Все секреты — только в `.env`.** `.env` в `.gitignore`; в репозитории — `.env.example` с placeholder'ами `YOUR_*`. Ключи API **никогда** не попадают в `config.json` (shared volume) и не передаются через `/admin`.
+> ⚠️ **Все секреты — только в `.env`.** `.env` в `.gitignore`; в репозитории — `.env.example` с placeholder'ами `YOUR_*`. Ключи API **никогда** не попадают в файлы shared volume (`config.json`, `system_prompt.md`, `status.json`) и не передаются через `/admin`. Воркер пишет в `status.json` только булевы флаги «провайдер сконфигурирован» — не значения ключей.
 
 ---
 
@@ -91,14 +91,14 @@
 | Action | Триггер | Записывается |
 |--------|---------|--------------|
 | `admin.login_success` / `admin.login_failed` | `POST /admin/login` | user, ip, path |
-| `admin.config_update` | `POST /admin` (сохранение) | provider/model/base_url, prompt_override_len, changed_keys |
+| `admin.config_update` | `POST /admin` (сохранение) | provider/model/base_url, prompt_len, prompt_changed, changed_keys |
 | `admin.rbac_denied` | demo-попытка мутации → `403` | user, ip, path |
 | `auth.worker_denied` | плохой `X-Worker-Token` → `401` | ip, path |
 
 > 🛡️ **Что НЕ попадает в аудит:**
 > - **Секреты** — ключи API, токены никогда не пишутся в `details`.
-> - **Полный текст `system_prompt_override`** — только его длина и список изменённых ключей (`changed_keys`).
-> - **Read-only-просмотры** (`/admin`, `/admin/audit`, `/admin/executions`) — не аудируются, чтобы журнал не засорялся self-noise.
+> - **Полный текст промпта** — только его длина (`prompt_len`) и факт изменения (`prompt_changed`), список изменённых ключей (`changed_keys`).
+> - **Read-only-просмотры** (`/admin`, `/admin/audit`, `/admin/executions`, `/admin/status`) — не аудируются, чтобы журнал не засорялся self-noise.
 
 Просмотр журнала: `GET /admin/audit` (read-only, demo-токен допущен). Деталь
 записи: `GET /admin/audit/{id}`. См. [🔌 API_CONTRACT.md §4](API_CONTRACT.md).

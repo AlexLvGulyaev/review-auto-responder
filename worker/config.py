@@ -20,6 +20,16 @@ class Settings(BaseSettings):
     # --- runtime-config (shared volume с сайтом; /admin пишет, worker читает) ---
     runtime_config_path: str = "/data/runtime/config.json"
 
+    # --- промпт как файл-SOT (shared volume) ---
+    # /admin перезаписывает этот файл при редактировании промпта; воркер
+    # читает его (hot-reload по mtime). При отсутствии — bootstrap из вшитого
+    # prompts/v1/system.md (см. worker.py).
+    runtime_prompt_path: str = "/data/runtime/system_prompt.md"
+
+    # --- status-снапшот воркера для /admin (shared volume, читает сайт) ---
+    # Воркер пишет liveness + статус провайдеров; сайт читает без HTTP-вызова.
+    worker_status_path: str = "/data/runtime/status.json"
+
     # --- идентичность AI-ответов ---
     ai_author_name: str = "AI Support"
 

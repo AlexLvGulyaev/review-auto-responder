@@ -6,6 +6,7 @@ from sqlalchemy import text
 
 from app.api.admin import router as admin_router
 from app.api.admin_executions import router as admin_executions_router
+from app.api.admin_status import router as admin_status_router
 from app.api.audit import router as audit_router
 from app.api.executions import router as executions_router
 from app.api.routes import router as reviews_router
@@ -38,3 +39,4 @@ app.include_router(admin_router)
 app.include_router(executions_router)
 app.include_router(audit_router)
 app.include_router(admin_executions_router)
+app.include_router(admin_status_router)

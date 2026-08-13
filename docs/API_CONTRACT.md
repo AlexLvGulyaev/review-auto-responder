@@ -100,28 +100,73 @@ Health-эндпоинт для Deployment Verification/Validation.
 
 | Метод | Путь | Назначение | Auth |
 |-------|------|-----------|------|
-| `GET` | `/admin` | Форма runtime-config (или редирект на login) | `admin_auth` (demo допущен) |
+| `GET` | `/admin` | Конфиг-консоль: настройки провайдеров + промпт (файл-SOT) + блок «Состояние системы» (ридонли) | `admin_auth` (demo допущен) |
 | `GET` | `/admin/login` | Форма ввода токена | — |
 | `POST` | `/admin/login` | Логин: установка cookie `admin_token` (8 ч) | — |
 | `POST` | `/admin/logout` | Удаление cookie | — |
-| `POST` | `/admin` | Сохранение runtime-config в `config.json` | `require_admin` (demo → `403`) |
+| `POST` | `/admin` | Сохранение runtime-config в `config.json` + промпта в `system_prompt.md` | `require_admin` (demo → `403`) |
+| `GET` | `/admin/status` | JSON-сводка состояния системы (overall/components/метрики/воркер/провайдеры) | `admin_auth` (demo допущен) |
 
-### 🖥️ 2.3. Поля runtime-config (POST `/admin`, form-data)
+### 🖥️ 2.3. Поля формы (POST `/admin`, form-data)
 
 | Поле | Тип | Описание |
 |------|-----|----------|
-| `provider` | `openai` \| `gigachat` \| `yandex` \| `custom` | Активный провайдер |
-| `openai_model` | str | Имя модели (для yandex — URI с `<folder_id>`) |
-| `openai_base_url` | str | base_url для openai/custom |
-| `yandex_folder_id` | str | folder_id для YandexGPT |
-| `system_prompt_override` | str | Override промпта (пусто = файл `prompts/v1/system.md`) |
+| `provider` | `openai` \| `gigachat` \| `yandex` \| `custom` | Активный провайдер → `config.json` |
+| `openai_model` | str | Имя модели (для yandex — URI с `<folder_id>`) → `config.json` |
+| `openai_base_url` | str | base_url для openai/custom → `config.json` |
+| `yandex_folder_id` | str | folder_id для YandexGPT → `config.json` |
+| `system_prompt` | str | Текст системного промпта → перезаписывает `system_prompt.md` (файл-SOT) |
 
-Сохранение → атомарная запись `config.json` (tempfile + `os.replace`) в shared volume → воркер подхватывает по mtime на следующем цикле.
+Runtime-параметры (`provider`/`model`/`base_url`/`folder_id`) → атомарная запись
+`config.json` (tempfile + `os.replace`) в shared volume. Промпт (`system_prompt`)
+→ атомарная запись `system_prompt.md` в тот же shared volume. Воркер подхватывает
+оба по mtime на следующем цикле — без рестарта.
+
+> 📌 **Промпт — файл-SOT.** Единственный источник текста промпта — файл
+> `system_prompt.md` на shared volume. Сохранение в `/admin` перезаписывает его.
+> Поля `system_prompt_override` в config.json больше нет.
 
 > ⚠️ Ключи API сюда **не** передаются и **не** хранятся — только в `.env`.
 
 Сохранение конфига, вход в `/admin` и отказы авторизации пишутся в журнал аудита
 (см. §4). Сами просмотры `/admin` **не** аудируются.
+
+### 🖥️ 2.4. `GET /admin/status` — состояние системы (JSON)
+
+Read-only JSON-сводка (demo допущен). Формируется из живых проб БД + метрик +
+`status.json` воркера из shared volume.
+
+```json
+{
+  "overall": "ok",
+  "components": {
+    "api": { "status": "ok" },
+    "database": { "name": "database", "status": "ok", "latency_ms": 1.02 }
+  },
+  "db_metrics": {
+    "reviews": { "new": 0, "processed": 24, "total": 24 },
+    "executions": { "ok": 10, "error": 0, "started": 0, "total": 10 },
+    "audit_count": 12,
+    "last_session": { "id": 10, "status": "ok", "provider_key": "gigachat", "model_name": "GigaChat-Max", "duration_ms": 1727, "finished_at": "..." },
+    "recent_errors": []
+  },
+  "current_config": {
+    "provider": "gigachat", "model": "GigaChat-Max", "base_url": "...", "yandex_folder_id": "",
+    "prompt": { "source": "file", "exists": true, "size": 1170, "mtime": "..." }
+  },
+  "worker": {
+    "available": true, "worker_alive": true, "age_seconds": 3.1,
+    "last_iteration_at": "...", "current_provider": "gigachat", "poll_interval": 5,
+    "providers": { "openai": false, "gigachat": true, "yandex": false }
+  }
+}
+```
+
+`overall = ok` если БД отвечает и воркер жив (и `status.json` доступен); иначе
+`degraded`. `worker_alive` = `last_iteration_at` свежее `3 × poll_interval`.
+`status.json` воркер пишет каждую итерацию в shared volume (liveness + bool-флаги
+«провайдер сконфигурирован», **без секретов**). Блок «Состояние системы» в
+`/admin` рендерится из тех же данных server-side.
 
 ---
 
@@ -230,8 +275,8 @@ HTML: параметры сессии (статус/провайдер/моде�
 | `admin.rbac_denied` | demo-попытка мутации → `403` |
 | `auth.worker_denied` | плохой `X-Worker-Token` на `PATCH /api/reviews` / `/api/executions` → `401` |
 
-> ⚠️ В `details` аудита не пишутся секреты и полный текст промпт-override
-> (только длина + список изменённых ключей).
+> ⚠️ В `details` аудита не пишутся секреты и полный текст промпта
+> (только `prompt_len` + `prompt_changed` + список изменённых ключей `changed_keys`).
 
 ---
 

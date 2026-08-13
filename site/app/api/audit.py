@@ -47,7 +47,7 @@ async def list_audit(
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     db: AsyncSession = Depends(get_db_session),
-    _identity=Depends(admin_auth),
+    identity=Depends(admin_auth),
 ) -> HTMLResponse:
     stmt = select(AuditLog)
     if action:
@@ -76,6 +76,8 @@ async def list_audit(
         "audit.html",
         {
             "request": request,
+            "identity": identity,
+            "is_demo": identity.is_demo,
             "entries": entries,
             "total": total,
             "limit": limit,
@@ -96,12 +98,12 @@ async def audit_detail(
     request: Request,
     audit_id: int,
     db: AsyncSession = Depends(get_db_session),
-    _identity=Depends(admin_auth),
+    identity=Depends(admin_auth),
 ) -> HTMLResponse:
     entry = await db.get(AuditLog, audit_id)
     if entry is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Audit entry not found.")
     return templates.TemplateResponse(
         "audit_detail.html",
-        {"request": request, "entry": entry},
+        {"request": request, "identity": identity, "is_demo": identity.is_demo, "entry": entry},
     )

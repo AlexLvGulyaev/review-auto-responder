@@ -23,7 +23,6 @@ DEFAULTS: dict[str, Any] = {
     "openai_model": "gpt-4.1-mini",
     "openai_base_url": "https://api.openai.com/v1",
     "yandex_folder_id": "",
-    "system_prompt_override": "",
 }
 
 

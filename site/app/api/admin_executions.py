@@ -46,7 +46,7 @@ async def list_executions(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     db: AsyncSession = Depends(get_db_session),
-    _identity=Depends(admin_auth),
+    identity=Depends(admin_auth),
 ) -> HTMLResponse:
     stmt = select(ExecutionSession)
     if review_id is not None:
@@ -73,6 +73,8 @@ async def list_executions(
         "executions.html",
         {
             "request": request,
+            "identity": identity,
+            "is_demo": identity.is_demo,
             "sessions": sessions,
             "total": total,
             "limit": limit,
@@ -93,7 +95,7 @@ async def execution_detail(
     request: Request,
     execution_id: int,
     db: AsyncSession = Depends(get_db_session),
-    _identity=Depends(admin_auth),
+    identity=Depends(admin_auth),
 ) -> HTMLResponse:
     session = await db.get(ExecutionSession, execution_id)
     if session is None:
@@ -101,5 +103,5 @@ async def execution_detail(
     # steps загружены lazy="selectin" — доступны без явного запроса.
     return templates.TemplateResponse(
         "execution_detail.html",
-        {"request": request, "session": session},
+        {"request": request, "identity": identity, "is_demo": identity.is_demo, "session": session},
     )

@@ -10,6 +10,8 @@ from config import get_settings
 from logging_config import configure_logging
 from models import ReviewCreatePayload, ReviewStatus, ReviewTone, ReviewUpdatePayload
 from processor import detect_tone, generate_response
+from prompt_loader import SYSTEM_PROMPT_FILE
+from runtime_config import get_runtime_config
 from state import get_worker_state
 from telegram_bot import send_new_review_notification
 
@@ -34,6 +36,48 @@ def write_heartbeat() -> None:
     payload = {
         "last_iteration_at": datetime.now(timezone.utc).isoformat(),
         "target_site_url": settings.target_site_url,
+    }
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def bootstrap_prompt() -> None:
+    """Скопировать вшитый prompts/v1/system.md в shared volume при первом запуске.
+
+    Shared-файл промпта — единственный SOT, редактируемый через /admin. Чтобы
+    сайт всегда видел текущий промпт, а воркер — читал файл, а не default,
+    при отсутствии shared-файла выкладываем начальный default из образа.
+    Уже существующий файл НЕ перезаписываем (оператор мог его изменить).
+    """
+    target = Path(settings.runtime_prompt_path)
+    if target.exists():
+        return
+    if not SYSTEM_PROMPT_FILE.exists():
+        logger.warning("Bundled system prompt not found: %s; shared file left absent", SYSTEM_PROMPT_FILE)
+        return
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(SYSTEM_PROMPT_FILE.read_text(encoding="utf-8"), encoding="utf-8")
+    logger.info("Bootstrapped system prompt from %s -> %s", SYSTEM_PROMPT_FILE, target)
+
+
+def write_worker_status() -> None:
+    """Status-снапшот в shared volume для /admin (liveness + статус провайдеров).
+
+    Сайт читает этот файл без HTTP-вызова воркера. Секреты (ключи) НЕ пишем —
+    только булевы флаги «сконфигурирован ли провайдер».
+    """
+    path = Path(settings.worker_status_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "worker_alive": True,
+        "last_iteration_at": datetime.now(timezone.utc).isoformat(),
+        "target_site_url": settings.target_site_url,
+        "current_provider": get_runtime_config().get("provider"),
+        "poll_interval": settings.worker_poll_interval,
+        "providers": {
+            "openai": bool(settings.openai_api_key),
+            "gigachat": bool(settings.gigachat_auth_key),
+            "yandex": bool(settings.yandex_api_key),
+        },
     }
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -191,6 +235,7 @@ async def process_new_reviews() -> int:
 
 async def main() -> None:
     await wait_for_site()
+    bootstrap_prompt()
     logger.info(
         "Worker started with poll interval=%s seconds, target site=%s",
         settings.worker_poll_interval,
@@ -205,6 +250,7 @@ async def main() -> None:
         except Exception as exc:  # noqa: BLE001
             logger.exception("Iteration failed, continuing: %s", exc)
         write_heartbeat()
+        write_worker_status()
         await asyncio.sleep(settings.worker_poll_interval)
 
 

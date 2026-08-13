@@ -1,98 +1,58 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Сессия #{{ session.id }} · Review Auto Responder</title>
-  <style>
-    :root { color-scheme: light; --bg:#f3f5f7; --card:#fff; --text:#17202a; --muted:#5c6b7a; --border:#d7dde4; --accent:#1f6feb; --success:#1a7f37; --warn:#9a6700; --error:#cf222e; --skip:#5c6b7a; }
-    * { box-sizing: border-box; }
-    body { margin:0; font-family:"Segoe UI",Tahoma,sans-serif; background:var(--bg); color:var(--text); }
-    .container { width:min(980px, calc(100% - 32px)); margin:0 auto; padding:32px 0 48px; }
-    .card { background:var(--card); border:1px solid var(--border); border-radius:18px; padding:28px; box-shadow:0 12px 35px rgba(15,23,42,.06); margin-bottom:20px; }
-    header { display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; gap:12px; flex-wrap:wrap; }
-    h1 { margin:0; font-size:22px; }
-    .nav { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:20px; }
-    .nav a { font-size:13px; color:var(--muted); text-decoration:none; border:1px solid var(--border); border-radius:10px; padding:7px 13px; background:#fff; }
-    .nav a:hover { color:var(--accent); border-color:var(--accent); }
-    .muted { color:var(--muted); font-size:13px; }
-    .grid { display:grid; grid-template-columns:repeat(4, 1fr); gap:16px; }
-    .kv label { display:block; font-size:12px; color:var(--muted); font-weight:600; margin-bottom:3px; }
-    .kv span { font-size:14px; }
-    .badge { display:inline-flex; align-items:center; border-radius:999px; padding:3px 10px; font-size:12px; font-weight:600; }
-    .badge.ok { color:var(--success); background:rgba(26,127,55,.12); }
-    .badge.error { color:var(--error); background:rgba(207,34,46,.12); }
-    .badge.started { color:var(--warn); background:rgba(154,103,0,.12); }
-    table { width:100%; border-collapse:collapse; font-size:13px; }
-    th, td { text-align:left; padding:10px; border-bottom:1px solid var(--border); vertical-align:top; }
-    th { color:var(--muted); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.03em; }
-    pre.meta { margin:0; white-space:pre-wrap; word-break:break-word; font-size:12px; background:#f7f9fb; border:1px solid var(--border); border-radius:8px; padding:8px 10px; max-width:340px; overflow-x:auto; }
-    .chip { font-size:11px; border-radius:6px; padding:2px 7px; border:1px solid var(--border); font-weight:600; }
-    .chip.ok { color:var(--success); border-color:rgba(26,127,55,.3); }
-    .chip.error { color:var(--error); border-color:rgba(207,34,46,.3); }
-    .chip.skipped { color:var(--skip); border-color:rgba(92,107,122,.3); }
-    a.back { color:var(--accent); text-decoration:none; font-size:13px; }
-    @media (max-width:760px){ .grid{ grid-template-columns:1fr 1fr; } }
-  </style>
-</head>
-<body>
-  <main class="container">
-    <nav class="nav">
-      <a href="/admin/executions">← К списку трейсов</a>
-      <a href="/admin">Конфиг</a>
-      <a href="/admin/audit">Аудит</a>
-      <a href="/">на сайт</a>
-    </nav>
+{% extends "admin_base.html" %}
 
-    <section class="card">
-      <header>
-        <h1>Сессия #{{ session.id }}</h1>
-        <span class="badge {{ session.status }}">{{ session.status }}</span>
-      </header>
+{% block title %}Сессия #{{ session.id }} · Админка{% endblock %}
+{% block page_title %}Сессия #{{ session.id }}{% endblock %}
+{% block page_subtitle %}<a href="/admin/executions">← к списку трейсов</a>{% endblock %}
 
-      <div class="grid">
-        <div class="kv"><label>Отзыв</label><span>{% if session.review_id %}#{{ session.review_id }}{% else %}—{% endif %}</span></div>
-        <div class="kv"><label>Маршрут</label><span>{{ session.route }}</span></div>
-        <div class="kv"><label>Провайдер</label><span>{{ session.provider_key or '—' }}</span></div>
-        <div class="kv"><label>Модель</label><span>{{ session.model_name or '—' }}</span></div>
-        <div class="kv"><label>Длительность</label><span>{% if session.duration_ms is not none %}{{ session.duration_ms }} мс{% else %}—{% endif %}</span></div>
-        <div class="kv"><label>Начало</label><span class="muted">{{ session.started_at.strftime('%Y-%m-%d %H:%M:%S') if session.started_at else '—' }}</span></div>
-        <div class="kv"><label>Финал</label><span class="muted">{{ session.finished_at.strftime('%Y-%m-%d %H:%M:%S') if session.finished_at else '—' }}</span></div>
-        <div class="kv"><label>Шагов</label><span>{{ session.steps|length }}</span></div>
-      </div>
+{% block content %}
+<section class="ai-card">
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+    <h2 class="ai-card__title" style="margin:0;">Сессия #{{ session.id }}</h2>
+    <span class="ai-chip {{ session.status }}">{{ session.status }}</span>
+  </div>
 
-      {% if session.execution_metadata %}
-      <div style="margin-top:18px;">
-        <label style="font-size:12px;color:var(--muted);font-weight:600;">Метаданные сессии</label>
-        <pre class="meta" style="max-width:100%;">{{ session.execution_metadata | tojson }}</pre>
-      </div>
-      {% endif %}
-    </section>
+  <div class="ai-grid ai-grid--4">
+    <div class="ai-metric"><div class="ai-metric__label">Отзыв</div><div class="ai-metric__value">{% if session.review_id %}#{{ session.review_id }}{% else %}—{% endif %}</div></div>
+    <div class="ai-metric"><div class="ai-metric__label">Маршрут</div><div class="ai-metric__value" style="font-size:0.95rem;">{{ session.route }}</div></div>
+    <div class="ai-metric"><div class="ai-metric__label">Провайдер</div><div class="ai-metric__value" style="font-size:0.95rem;">{{ session.provider_key or '—' }}</div></div>
+    <div class="ai-metric"><div class="ai-metric__label">Модель</div><div class="ai-metric__value" style="font-size:0.95rem;">{{ session.model_name or '—' }}</div></div>
+    <div class="ai-metric"><div class="ai-metric__label">Длительность</div><div class="ai-metric__value">{% if session.duration_ms is not none %}{{ session.duration_ms }} мс{% else %}—{% endif %}</div></div>
+    <div class="ai-metric"><div class="ai-metric__label">Начало</div><div class="ai-metric__value" style="font-size:0.8rem;color:var(--ai-text-muted);">{{ session.started_at.strftime('%Y-%m-%d %H:%M:%S') if session.started_at else '—' }}</div></div>
+    <div class="ai-metric"><div class="ai-metric__label">Финал</div><div class="ai-metric__value" style="font-size:0.8rem;color:var(--ai-text-muted);">{{ session.finished_at.strftime('%Y-%m-%d %H:%M:%S') if session.finished_at else '—' }}</div></div>
+    <div class="ai-metric"><div class="ai-metric__label">Шагов</div><div class="ai-metric__value">{{ session.steps|length }}</div></div>
+  </div>
 
-    <section class="card">
-      <header><h1>Шаги пайплайна</h1></header>
-      {% if session.steps %}
-      <table>
-        <thead>
-          <tr><th>#</th><th>Стадия</th><th>Статус</th><th>Длительность</th><th>Начало</th><th>Метаданные</th></tr>
-        </thead>
-        <tbody>
-        {% for st in session.steps %}
-          <tr>
-            <td>{{ st.step_order }}</td>
-            <td><strong>{{ st.stage_name }}</strong></td>
-            <td><span class="chip {{ st.status }}">{{ st.status }}</span></td>
-            <td>{% if st.duration_ms is not none %}{{ st.duration_ms }} мс{% else %}—{% endif %}</td>
-            <td class="muted">{{ st.started_at.strftime('%H:%M:%S.%f')[:-3] if st.started_at else '—' }}</td>
-            <td>{% if st.step_metadata %}<pre class="meta">{{ st.step_metadata | tojson }}</pre>{% else %}—{% endif %}</td>
-          </tr>
-        {% endfor %}
-        </tbody>
-      </table>
-      {% else %}
-        <p class="muted">Шаги не записаны (сессия не закрыта или воркер упал до finish).</p>
-      {% endif %}
-    </section>
-  </main>
-</body>
-</html>
+  {% if session.execution_metadata %}
+  <hr class="ai-divider">
+  <div class="ai-field">
+    <label>Метаданные сессии</label>
+    <pre class="ai-pre">{{ session.execution_metadata | tojson }}</pre>
+  </div>
+  {% endif %}
+</section>
+
+<section class="ai-card">
+  <h2 class="ai-card__title">Шаги пайплайна</h2>
+  {% if session.steps %}
+  <table class="ai-table">
+    <thead>
+      <tr><th>#</th><th>Стадия</th><th>Статус</th><th>Длительность</th><th>Начало</th><th>Метаданные</th></tr>
+    </thead>
+    <tbody>
+    {% for st in session.steps %}
+      <tr>
+        <td class="id">{{ st.step_order }}</td>
+        <td><strong>{{ st.stage_name }}</strong></td>
+        <td><span class="ai-chip {{ st.status }}">{{ st.status }}</span></td>
+        <td class="id">{% if st.duration_ms is not none %}{{ st.duration_ms }} мс{% else %}—{% endif %}</td>
+        <td class="muted">{{ st.started_at.strftime('%H:%M:%S.%f')[:-3] if st.started_at else '—' }}</td>
+        <td>{% if st.step_metadata %}<pre class="ai-pre">{{ st.step_metadata | tojson }}</pre>{% else %}—{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+    <div class="ai-empty">Шаги не записаны (сессия не закрыта или воркер упал до finish).</div>
+  {% endif %}
+</section>
+{% endblock %}

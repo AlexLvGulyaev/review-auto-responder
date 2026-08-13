@@ -5,25 +5,62 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Вход · Админка</title>
   <style>
-    :root { color-scheme: light; --bg:#f3f5f7; --card:#fff; --text:#17202a; --muted:#5c6b7a; --border:#d7dde4; --accent:#1f6feb; --error:#b42318; }
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700&display=swap');
+    :root {
+      --ai-bg:#0b0f19; --ai-surface:#151b2b; --ai-border:#273043;
+      --ai-text:#f1f5f9; --ai-text-muted:#8b95a7; --ai-primary:#2f7bff;
+      --ai-primary-hover:#1d62d9; --ai-error:#ef4444; --ai-radius:10px;
+      --ai-font-display:'Outfit',-apple-system,BlinkMacSystemFont,sans-serif;
+      --ai-font-body:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;
+    }
     * { box-sizing: border-box; }
-    body { margin:0; font-family:"Segoe UI",Tahoma,sans-serif; background:var(--bg); color:var(--text); display:flex; align-items:center; justify-content:center; min-height:100vh; }
-    .card { background:var(--card); border:1px solid var(--border); border-radius:18px; padding:32px; width:min(420px, calc(100% - 32px)); box-shadow:0 12px 35px rgba(15,23,42,.06); }
-    h1 { margin:0 0 6px; font-size:22px; }
-    p.hint { margin:0 0 20px; color:var(--muted); font-size:14px; line-height:1.5; }
-    label { display:block; font-size:13px; color:var(--muted); margin-bottom:6px; }
-    input { width:100%; border:1px solid var(--border); border-radius:12px; padding:12px 14px; font:inherit; }
-    input:focus { outline:2px solid rgba(31,111,235,.15); border-color:var(--accent); }
-    button { margin-top:16px; width:100%; border:0; border-radius:12px; padding:12px; background:var(--accent); color:#fff; font:inherit; font-weight:600; cursor:pointer; }
-    button:hover { background:#1558b0; }
-    .error { color:var(--error); font-size:14px; margin-top:12px; }
-    a.back { display:inline-block; margin-top:16px; color:var(--muted); font-size:13px; text-decoration:none; }
+    body {
+      margin: 0; min-height: 100vh;
+      font-family: var(--ai-font-body);
+      background: radial-gradient(1200px 600px at 70% -10%, rgba(47,123,255,0.10), transparent), var(--ai-bg);
+      color: var(--ai-text);
+      display: flex; align-items: center; justify-content: center;
+      -webkit-font-smoothing: antialiased;
+    }
+    .card {
+      background: var(--ai-surface); border: 1px solid var(--ai-border);
+      border-radius: var(--ai-radius); padding: 32px;
+      width: min(420px, calc(100% - 32px)); box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+    }
+    .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
+    .brand__icon {
+      width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;
+      border-radius: var(--ai-radius); background: rgba(47,123,255,0.12); font-size: 1.1rem;
+    }
+    .brand__name { font-family: var(--ai-font-display); font-weight: 700; font-size: 1.1rem; }
+    h1 { font-family: var(--ai-font-display); font-size: 1.25rem; margin: 0 0 6px; }
+    .hint { margin: 0 0 20px; color: var(--ai-text-muted); font-size: 0.85rem; line-height: 1.5; }
+    label { display: block; font-size: 0.8rem; color: var(--ai-text-muted); margin-bottom: 6px; }
+    input {
+      width: 100%; background: var(--ai-bg); border: 1px solid var(--ai-border);
+      border-radius: var(--ai-radius); color: var(--ai-text); padding: 12px 14px;
+      font: inherit; font-size: 0.9rem;
+    }
+    input:focus { outline: none; border-color: var(--ai-primary); }
+    button {
+      margin-top: 16px; width: 100%; border: 0; border-radius: var(--ai-radius);
+      padding: 12px; background: var(--ai-primary); color: #fff;
+      font: inherit; font-weight: 600; cursor: pointer; transition: background 0.15s;
+    }
+    button:hover { background: var(--ai-primary-hover); }
+    .error { color: var(--ai-error); font-size: 0.85rem; margin-top: 12px; }
+    .back { display: inline-block; margin-top: 16px; color: var(--ai-text-muted); font-size: 0.8rem; text-decoration: none; }
+    .back:hover { color: var(--ai-text); }
   </style>
 </head>
 <body>
   <main class="card">
+    <div class="brand">
+      <span class="brand__icon">💬</span>
+      <span class="brand__name">Review Auto Responder</span>
+    </div>
     <h1>Админка · вход</h1>
-    <p class="hint">Введите токен доступа. <strong>ADMIN_TOKEN</strong> — полный доступ (смена провайдера, модели, промпта). <strong>ADMIN_DEMO_TOKEN</strong> — только просмотр (demo-режим).</p>
+    <p class="hint">Введите токен доступа. <strong>ADMIN_TOKEN</strong> — полный доступ (смена провайдера, модели, промпта). <strong>ADMIN_DEMO_TOKEN</strong> — только просмотр.</p>
     <form method="post" action="/admin/login">
       <label for="token">Токен</label>
       <input id="token" name="token" type="password" placeholder="вставьте токен" autofocus required>

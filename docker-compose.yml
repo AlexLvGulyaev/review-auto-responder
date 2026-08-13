@@ -36,6 +36,8 @@ services:
       ADMIN_TOKEN: ${ADMIN_TOKEN}
       ADMIN_DEMO_TOKEN: ${ADMIN_DEMO_TOKEN}
       ADMIN_AUTH_ENABLED: ${ADMIN_AUTH_ENABLED:-true}
+      RUNTIME_PROMPT_PATH: /data/runtime/system_prompt.md
+      WORKER_STATUS_PATH: /data/runtime/status.json
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     env_file:
       - .env
@@ -63,6 +65,8 @@ services:
       STATE_FILE_PATH: /service/data/state.json
       HEARTBEAT_FILE_PATH: /service/data/heartbeat.json
       RUNTIME_CONFIG_PATH: /data/runtime/config.json
+      RUNTIME_PROMPT_PATH: /data/runtime/system_prompt.md
+      WORKER_STATUS_PATH: /data/runtime/status.json
       AI_AUTHOR_NAME: ${AI_AUTHOR_NAME:-AI Support}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       GIGACHAT_AUTH_KEY: ${GIGACHAT_AUTH_KEY:-}

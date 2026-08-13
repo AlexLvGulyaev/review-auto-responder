@@ -58,6 +58,12 @@ cp .env.example .env
 
 > ⚠️ **Не коммитьте `.env`.** Он в `.gitignore`. В репозитории — только `.env.example` с placeholder'ами.
 
+> 📌 **Пути shared volume** (`RUNTIME_CONFIG_PATH`, `RUNTIME_PROMPT_PATH`,
+> `WORKER_STATUS_PATH`) предзаданы в `docker-compose.yml` для обоих сервисов
+> (`/data/runtime/config.json`, `/data/runtime/system_prompt.md`,
+> `/data/runtime/status.json`) — в `.env` их выносить не нужно. Volume
+> `runtime-config` смонтирован и в `review-site`, и в `review-worker`.
+
 ---
 
 ## ▶️ 3. Запуск
@@ -151,20 +157,52 @@ curl -s "http://localhost:8000/api/reviews?status=new" | python3 -m json.tool
 
 ## 🖥️ 5. Операторская панель `/admin`
 
-### 🖥️ 5.1. Вход
+### 🖥️ 5.1. Вход и структура
 
-Откройте `http://localhost:8000/admin` → форма ввода токена.
+Откройте `http://localhost:8000/admin` → форма ввода токена (тёмная страница входа).
 
-- **Полный доступ:** введите `ADMIN_TOKEN` → форма runtime-config с активной кнопкой сохранения.
-- **Демо-доступ:** введите `ADMIN_DEMO_TOKEN` → форма с бейджем «👁 Демо-режим: только просмотр» и отключённой кнопкой сохранения.
+- **Полный доступ:** введите `ADMIN_TOKEN` → конфиг-консоль с активной кнопкой сохранения, бейдж «🛠 Администратор».
+- **Демо-доступ:** введите `ADMIN_DEMO_TOKEN` → бейдж «👁 Демо-режим · только просмотр», кнопка сохранения отключена.
 
-### 🖥️ 5.2. Смена провайдера без рестарта
+После входа — sidebar-лэйаут (домстиль AIP Dark) с тремя консолями:
+
+| Раздел | Путь | Назначение |
+|--------|------|-----------|
+| **Конфиг** | `/admin` | Настройки провайдеров + системный промпт (файл-SOT) + ридонли-блок «Состояние системы» |
+| **Обсервабилити** | `/admin/executions` | Трейсы обработки отзывов |
+| **Аудит** | `/admin/audit` | Журнал admin/security-событий |
+
+### 🖥️ 5.2. Смена провайдера и промпта без рестарта
 
 1. В `/admin` (токен `ADMIN_TOKEN`) выберите `provider=gigachat`, `openai_model=GigaChat-Max` → **Сохранить**.
-2. Оставьте новый отзыв (см. §4.1).
-3. В течение цикла опроса воркер подхватит новый `config.json` (mtime) и сгенерирует ответ через GigaChat — **без рестарта** контейнера.
+2. При желании отредактируйте поле «Системный промпт» — сохранение перезаписывает
+   файл `system_prompt.md` на shared volume (файл-SOT).
+3. Оставьте новый отзыв (см. §4.1).
+4. В течение цикла опроса воркер подхватит новый `config.json` и `system_prompt.md`
+   (по mtime) и сгенерирует ответ через GigaChat — **без рестарта** контейнера.
 
-> 📌 Проверьте в логах: `Runtime config reloaded: provider=gigachat model=GigaChat-Max`.
+> 📌 Проверьте в логах: `Runtime config reloaded: provider=gigachat model=GigaChat-Max`
+> и (после обработки отзыва) `System prompt reloaded from /data/runtime/system_prompt.md`.
+
+> 📌 **Промпт — файл-SOT.** При первом запуске воркер копирует вшитый
+> `worker/prompts/v1/system.md` в `/data/runtime/system_prompt.md` (bootstrap).
+> Дальше единственный источник промпта — этот файл; `/admin` перезаписывает его.
+> Поля `system_prompt_override` в config.json больше нет.
+
+### 🖥️ 5.2.1. Состояние системы
+
+Блок «Состояние системы» вверху `/admin` (ридонли) + JSON-эндпоинт `GET /admin/status`:
+
+- общий статус (`ok`/`degraded`), живая проба БД (`SELECT 1` + latency);
+- метрики: отзывы new/processed, трейсы ok/error/started, аудит-счётчик, последняя сессия;
+- liveness воркера (воркер пишет `status.json` в shared volume каждую итерацию —
+  `worker_alive` = `last_iteration_at` свеже `3 × poll_interval`);
+- статус провайдеров (булевы флаги «сконфигурирован», без секретов) + последние ошибки трейсов.
+
+```bash
+curl -s -b /tmp/admin_cookies.txt http://localhost:8000/admin/status | python3 -m json.tool
+# Сначала логин (см. §5.3) для получения cookie admin_token.
+```
 
 ### 🖥️ 5.3. Проверка демо-RBAC
 

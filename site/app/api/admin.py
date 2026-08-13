@@ -24,6 +24,7 @@ import json
 import logging
 import os
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -52,7 +53,6 @@ DEFAULT_RUNTIME_CONFIG: dict[str, Any] = {
     "openai_model": "gpt-4.1-mini",
     "openai_base_url": "https://api.openai.com/v1",
     "yandex_folder_id": "",
-    "system_prompt_override": "",
 }
 
 
@@ -150,14 +150,70 @@ def write_runtime_config(payload: dict[str, Any]) -> None:
         raise
 
 
+# --- system_prompt.md read/write (shared volume, файл-SOT) ------------------
+
+
+def _prompt_path() -> Path:
+    return Path(settings.runtime_prompt_path)
+
+
+def read_prompt_text() -> str:
+    """Текущий текст системного промпта из shared-файла (SOT)."""
+    path = _prompt_path()
+    if not path.exists():
+        return ""
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError as exc:
+        logger.warning("prompt file read failed (%s): %s", path, exc)
+        return ""
+
+
+def write_prompt_text(text: str) -> None:
+    """Атомарная запись system_prompt.md в shared volume (воркер hot-reload'ит по mtime)."""
+    path = _prompt_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=".prompt.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(text)
+        os.replace(tmp, path)
+    except Exception:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
+def prompt_info() -> dict[str, Any]:
+    """Ридонли-мета о файле промпта для блока «Состояние системы»."""
+    path = _prompt_path()
+    if not path.exists():
+        return {"source": "file", "exists": False, "size": 0, "mtime": None}
+    try:
+        stat = path.stat()
+        return {
+            "source": "file",
+            "exists": True,
+            "size": stat.st_size,
+            "mtime": datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat(),
+        }
+    except OSError:
+        return {"source": "file", "exists": False, "size": 0, "mtime": None}
+
+
 # --- routes -----------------------------------------------------------------
 
 
 @router.get("")
-async def admin_panel(request: Request):
+async def admin_panel(request: Request, db: AsyncSession = Depends(get_db_session)):
     identity = _identity_from_request(request)
     if identity is None:
         return RedirectResponse(url="/admin/login", status_code=status.HTTP_303_SEE_OTHER)
+    # Локальный импорт — разрывает цикл admin ↔ admin_status.
+    from app.api.admin_status import build_system_status
+
     config = read_runtime_config()
     return templates.TemplateResponse(
         "admin.html",
@@ -166,6 +222,9 @@ async def admin_panel(request: Request):
             "identity": identity,
             "is_demo": identity.is_demo,
             "config": config,
+            "prompt_text": read_prompt_text(),
+            "prompt_info": prompt_info(),
+            "status": await build_system_status(db),
             "saved": request.query_params.get("saved") == "1",
         },
     )
@@ -235,7 +294,7 @@ async def admin_save(
     openai_model: str = Form(...),
     openai_base_url: str = Form(...),
     yandex_folder_id: str = Form(""),
-    system_prompt_override: str = Form(""),
+    system_prompt: str = Form(""),
     db: AsyncSession = Depends(get_db_session),
 ):
     previous = read_runtime_config()
@@ -244,10 +303,17 @@ async def admin_save(
         "openai_model": openai_model,
         "openai_base_url": openai_base_url,
         "yandex_folder_id": yandex_folder_id.strip(),
-        "system_prompt_override": system_prompt_override,
     }
     write_runtime_config(payload)
     changed_keys = sorted(k for k in payload if previous.get(k) != payload[k])
+
+    # Промпт — файл-SOT: перезаписываем shared-файл, воркер hot-reload'ит по mtime.
+    previous_prompt = read_prompt_text()
+    new_prompt = system_prompt.strip()
+    prompt_changed = previous_prompt.strip() != new_prompt
+    if prompt_changed:
+        write_prompt_text(new_prompt)
+
     await AuditService(db).log_audit(
         action="admin.config_update",
         resource_type="runtime_config",
@@ -261,15 +327,17 @@ async def admin_save(
             "model": payload["openai_model"],
             "base_url": payload["openai_base_url"],
             "yandex_folder_id": payload["yandex_folder_id"],
-            "prompt_override_len": len(payload["system_prompt_override"]),
+            "prompt_len": len(new_prompt),
+            "prompt_changed": prompt_changed,
             "changed_keys": changed_keys,
         },
     )
     logger.info(
-        "Runtime config updated by user_id=%s role=%s: provider=%s model=%s",
+        "Runtime config updated by user_id=%s role=%s: provider=%s model=%s prompt_changed=%s",
         admin.user_id,
         admin.user_role,
         payload["provider"],
         payload["openai_model"],
+        prompt_changed,
     )
     return RedirectResponse(url="/admin?saved=1", status_code=status.HTTP_303_SEE_OTHER)

@@ -21,8 +21,12 @@ class Settings(BaseSettings):
     admin_demo_token: str = ""
     admin_auth_enabled: bool = True
 
-    # Shared volume path: /admin writes config.json here, worker hot-reloads it.
+    # Shared volume paths: /admin writes config.json here, worker hot-reloads it.
     runtime_config_path: str = "/data/runtime/config.json"
+    # Промпт как файл-SOT: /admin перезаписывает этот файл, воркер читает его.
+    runtime_prompt_path: str = "/data/runtime/system_prompt.md"
+    # Worker status-снапшот (liveness + статус провайдеров) — сайт читает для /admin/status.
+    worker_status_path: str = "/data/runtime/status.json"
 
     # Логирование: уровень логов (DEBUG/INFO/WARNING/ERROR), default INFO.
     log_level: str = "INFO"

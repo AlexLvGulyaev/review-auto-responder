@@ -24,7 +24,7 @@
 | `review-site` | FastAPI, SQLAlchemy 2 (async), asyncpg, Jinja2 | Хранение отзывов, публичный UI, `/admin` runtime-config, `/health` |
 | `review-worker` | asyncio, httpx, openai SDK, urllib (GigaChat) | Опрос, классификация тона, генерация ответа, write-back, Telegram |
 | `db` | PostgreSQL 16 | Хранилище отзывов (самоссылающаяся модель `Review`) |
-| `runtime-config` (volume) | shared volume `config.json` | Runtime-параметры (провайдер/модель/промпт); `/admin` пишет, воркер читает по mtime |
+| `runtime-config` (volume) | shared volume: `config.json` + `system_prompt.md` + `status.json` | Runtime-параметры (`config.json`), промпт-файл-SOT (`system_prompt.md`), status-снапшот воркера (`status.json`); `/admin` пишет config+промпт, воркер пишет status, оба читают по mtime/файлу |
 
 ---
 
@@ -122,7 +122,15 @@ flowchart TD
     S -->|execution_session ok/error + steps| DB
     W -->|state.json| ST[(state.json)]
     W -->|heartbeat.json| H[(heartbeat.json)]
+    W -->|status.json shared volume| SV2[(/data/runtime/status.json)]
+    S -->|reads status.json + config.json + system_prompt.md| SV[(shared volume runtime-config)]
 ```
+
+Админка `/admin` — 4 раздела в sidebar-лэйауте (домстиль AIP Dark): **Логин**
+(standalone), **Конфиг-консоль** (настройки провайдеров + промпт-файл-SOT +
+ридонли-блок «Состояние системы»), **Обсервабилити** (`/admin/executions`),
+**Аудит** (`/admin/audit`). Сайт — server-rendered Jinja2; `admin_base.html` —
+общий shell с sidebar-навигацией.
 
 ### 🔀 4.2. Последовательность обработки одного отзыва
 
@@ -160,21 +168,33 @@ flowchart TD
 | Где | Что | Кто меняет |
 |-----|-----|-----------|
 | `.env` | API-ключи (секреты) | Владелец/инженер (перед развёртыванием) |
-| `config.json` (shared volume) | `provider`, `openai_model`, `openai_base_url`, `yandex_folder_id`, `system_prompt_override` | Оператор через `/admin` (без рестарта) |
+| `config.json` (shared volume) | `provider`, `openai_model`, `openai_base_url`, `yandex_folder_id` | Оператор через `/admin` (без рестарта) |
+| `system_prompt.md` (shared volume) | Текст системного промпта (файл-SOT) | Оператор через `/admin` (без рестарта) |
 
-> 📌 Ключи API **никогда** не попадают в `config.json`/браузер/`/admin`. `/admin` хранит только runtime-параметры.
+> 📌 Ключи API **никогда** не попадают в `config.json`/`system_prompt.md`/браузер/`/admin`. `/admin` хранит только runtime-параметры и промпт.
 
-### 🤖 5.3. Hot-reload (паттерн runtime-config, mtime-кеш)
+### 🤖 5.3. Hot-reload (mtime-кеш)
 
-`RuntimeConfig` (воркер) кеширует `config.json` по `st_mtime`. При каждом `get()` проверяется mtime; если изменился — перечитывается. Смена провайдера/модели/промпта через `/admin` применяется на **следующем цикле опроса** без рестарта воркера.
+`RuntimeConfig` (воркер) кеширует `config.json` по `st_mtime`; `_PromptCache`
+кеширует `system_prompt.md` по `st_mtime`. При каждом обращении проверяется mtime;
+если изменился — перечитывается. Смена провайдера/модели/промпта через `/admin`
+применяется на **следующем цикле опроса** без рестарта воркера.
 
 ---
 
 ## 📝 6. Промпт
 
-- **Файл:** `worker/prompts/v1/system.md` — единый SOT текста системного промпта (не хардкод).
-- **Override:** если в `config.json` задан непустой `system_prompt_override` — используется он (применяется на следующем цикле).
-- **Встроенный default** — на случай отсутствия файла (не должен случаться в образе).
+- **Файл-SOT:** `/data/runtime/system_prompt.md` (shared volume `runtime-config`) —
+  единственный источник текста системного промпта. `/admin` перезаписывает его
+  при редактировании; воркер читает и hot-reload'ит по mtime — смена применяется
+  на следующем цикле без рестарта.
+- **Bootstrap:** при отсутствии shared-файла (первый запуск / чистый volume) воркер
+  копирует вшитый `worker/prompts/v1/system.md` туда при старте (`worker.bootstrap_prompt`).
+  Уже существующий файл НЕ перезаписывается — сохраняются правки оператора.
+- **Встроенный default** (`prompt_loader._BUILTIN_DEFAULT`) — fallback, только если
+  shared-файл отсутствует (не должен случаться после bootstrap).
+- **Файл `worker/prompts/v1/system.md`** (вшит в образ) — начальный default для
+  bootstrap; не редактируется в runtime.
 
 ---
 
@@ -231,11 +251,32 @@ demo допущен). Секреты и полный текст промпт-ove
 | Сигнал | Контур | Где | Назначение |
 |--------|--------|-----|-----------|
 | `GET /health` | — | сайт | Deployment Verification/Validation |
+| `GET /admin/status` | — | сайт (`/admin`) | JSON-сводка + блок «Состояние системы»: БД-проба, метрики, liveness воркера, статус провайдеров, последние ошибки |
 | `heartbeat.json` | — | воркер (`/service/data/`) | Docker healthcheck: mtime/`last_iteration_at` не старше `WORKER_HEALTHCHECK_MAX_AGE` |
+| `status.json` | — | shared volume (`/data/runtime/`) | Воркер пишет liveness + bool-флаги «провайдер сконфигурирован» (без секретов); сайт читает для `/admin/status` без HTTP-вызова |
 | stdout-логи | 1 | оба сервиса | Этапы обработки (INFO), сбои провайдера (WARNING/EXCEPTION) |
 | `execution_sessions` + `execution_steps` | 2 | БД (`/admin/executions`) | Трасса пайплайна + LLM-метрики каждого отзыва |
 | `audit_logs` | 3 | БД (`/admin/audit`) | Журнал admin/security-событий |
 | `state.json` | — | воркер | Идемпотентность (не observability) |
+
+### 📊 7.4. Консоль состояния системы (`/admin/status`)
+
+Read-only обзор здоровья (модель как в AI Curator `/admin/status`): `overall`
+(ok/degraded) + живые пробы компонентов (`database` — `SELECT 1` + latency) +
+метрики БД (отзывы new/processed, трейсы ok/error/started, аудит-счётчик,
+последняя сессия) + текущий применённый конфиг + liveness воркера + статус
+провайдеров (bool-флаги configured) + последние ошибки трейсов.
+
+Воркер не имеет HTTP-эндпоинта для опроса сайтом — вместо обратного направления
+зависимости воркер пишет `status.json` в **shared volume** каждую итерацию
+(`write_worker_status`): `worker_alive`, `last_iteration_at`, `current_provider`,
+`poll_interval`, `providers: {openai/gigachat/yandex: bool}`. Сайт читает файл
+(`admin_status._read_worker_status`), liveness = `last_iteration_at` свежее
+`3 × poll_interval`. Секреты (ключи) в файл **не** пишутся — только булевы флаги.
+
+Блок «Состояние системы» рендерится в `/admin` (server-side, из тех же данных);
+`GET /admin/status` отдаёт JSON для будущего JS-дэшборда. Auth: `admin_auth`
+(demo допущен, read-only, не аудируется).
 
 ---
 
