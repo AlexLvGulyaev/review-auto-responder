@@ -248,7 +248,7 @@ demo допущен). Секреты и полный текст промпт-ove
 ## 📚 Связанные документы
 
 - [🏠 `README.md`](../README.md) — главная страница проекта.
-- [📋 `docs/SPEC.md`](SPEC.md) — продуктовая спецификация.
+- [📋 `docs/PROJECT_STATE.md`](PROJECT_STATE.md) — паспорт состояния проекта.
 - [📋 `docs/IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) — технический план.
 - [🔌 `docs/API_CONTRACT.md`](API_CONTRACT.md) — контракты HTTP API.
 - [🤖 `docs/EXTERNAL_PROVIDERS.md`](EXTERNAL_PROVIDERS.md) — параметры LLM-провайдеров.

@@ -3,7 +3,7 @@
 **Проект:** review-auto-responder
 **Дата создания:** 2026-08-13
 **Последнее обновление:** 2026-08-13
-**Статус:** IMPLEMENTATION_PLAN готов. Старт разработки — каркас `site/` и `worker/` с web-`/admin` runtime-config.
+**Статус:** ✅ Портфельный актив. Реализован, прошёл Deployment Validation (17/17 PASS), опубликован как публичный репозиторий с живым демо.
 
 ---
 
@@ -13,60 +13,62 @@
 
 Проект состоит из двух сервисов:
 
-1. **Тестовый сайт отзывов** (legacy `app_test_2803`) — FastAPI + PostgreSQL 16, модель `Review` с самоссылкой `parent_id` (вложенные комментарии), поля `status` (new/processed), `tone`, `response`. Эндпоинты: `GET /`, `GET/POST /api/reviews`, `PATCH /api/reviews/{id}`.
-2. **Ассистент-обработчик** (legacy `worker_ai`) — async-поллер: каждые N секунд забирает с сайта отзывы со `status=new`, определяет тон, генерирует ответ, пишет ответ обратно (дочерний комментарий + смена статуса), шлёт уведомление в Telegram.
+1. **Сайт отзывов** (на базе legacy `app_test_2803`) — FastAPI + PostgreSQL 16, модель `Review` с самоссылкой `parent_id` (вложенные комментарии), поля `status` (new/processed), `tone`, `response`. Эндпоинты: `GET /`, `GET/POST /api/reviews`, `PATCH /api/reviews/{id}`.
+2. **Ассистент-обработчик** (на базе legacy `worker_ai`) — async-поллер: каждые N секунд забирает с сайта отзывы со `status=new`, определяет тон, генерирует ответ, пишет ответ обратно (дочерний комментарий + смена статуса), шлёт уведомление в Telegram.
 
-**Ключевые параметры (legacy, as-built):**
+> 📌 **Атрибуция:** идея и исходная архитектура взяты из публичных репозиториев `github.com/MrGAN12009/worker_ai` (ассистент-обработчик) и `github.com/MrGAN12009/app_test_2803` (тестовый сайт отзывов). Текущая версия переработана в единый самодостаточный двухсервисный проект.
+
+**Ключевые параметры:**
 
 | Параметр | Значение |
 |----------|----------|
 | Сайт | FastAPI + SQLAlchemy 2.x async + asyncpg + Jinja2 |
 | БД | PostgreSQL 16 |
 | Обработчик | Python 3.12, asyncio, httpx |
-| LLM | OpenAI API (`responses.create`) + локальный fallback по ключевым словам |
+| LLM | OpenAI / GigaChat / YandexGPT / «Свой» (Chat Completions) + словарный fallback |
 | Классификатор тона | Словарь маркеров (без LLM) |
 | Уведомления | Telegram Bot API (sendMessage) |
 | Состояние | Локальный JSON (`state.json`) |
-| Контейнеризация | Docker Compose (отдельная для каждого сервиса) |
+| Контейнеризация | Docker Compose (единый: db + site + worker) |
+| Observability | stdout-логирование + execution-tracing + аудит |
 
 ---
 
 ## 📊 2. Current Status
 
-**Стадия:** ✅ Портфельный актив (публичное демо). Доработка реализована (site + worker + единый compose + `/admin` runtime-config + демо-RBAC + мультипровайдерность + промпт-в-файле + три контура observability), Deployment Validation пройдена в чистом окружении (17/17 PASS), публичный репозиторий опубликован (github.com/AlexLvGulyaev/review-auto-responder), живое демо развёрнуто за обратным прокси (Traefik, TLS) по адресу https://review-auto-responder.alex-n8n.site (ответы генерируются через GigaChat), отчёт по ДЗ и сопроводительное письмо куратору подготовлены.
+**Стадия:** ✅ Портфельный актив (публичное демо). Доработка реализована (site + worker + единый compose + `/admin` runtime-config + демо-RBAC + мультипровайдерность + промпт-в-файле + три контура observability), Deployment Validation пройдена в чистом окружении (17/17 PASS), публичный репозиторий опубликован (github.com/AlexLvGulyaev/review-auto-responder), живое демо развёрнуто за обратным прокси (Traefik, TLS) по адресу https://review-auto-responder.alex-n8n.site (ответы генерируются через GigaChat).
 
 ### ✅ Завершённые задачи
 
-- [x] Клонирование legacy-репозиториев преподавателя (`worker_ai`, `app_test_2803`) как референса (публичные репозитории github.com/MrGAN12009).
+- [x] Анализ legacy-репозиториев-референсов (`worker_ai`, `app_test_2803`, публичные репозитории github.com/MrGAN12009) как отправной точки.
 - [x] Анализ as-built архитектуры: путь данных, файлы по этапам, взаимодействие `client.py`/`processor.py`/`worker.py`, роль `state.py`.
-- [x] Зафиксировано исходное задание во внутренней истории задач лаборатории.
+- [x] Зафиксированы исходные требования и рамки доработки.
 - [x] **Observability — три контура:** централизованное stdout-логирование (`LOG_LEVEL`), execution-tracing обработки отзыва (`/admin/executions`, LLM-метрики в трассах), аудит admin/security-событий (`/admin/audit`). Верифицировано на живом публичном демо.
 
 ### 🔴 Высокий приоритет
 
-- [x] **Утвердить направление доработки** — выбран полный объём доработки (портфолио-стиль лаборатории).
-- [x] **SPEC** — `docs/SPEC.md` подготовлена; жизненный цикл восстановлен: PROJECT_STATE → SPEC → IMPLEMENTATION_PLAN → Разработка.
+- [x] **Утвердить направление доработки** — выбран полный объём доработки (портфолио-стиль).
 - [x] **IMPLEMENTATION_PLAN** — `docs/IMPLEMENTATION_PLAN.md` готов; утверждён web-`/admin` runtime-config.
-- [ ] **Зафиксировать архитектуру как публичный артефакт** — схема пути данных (sequence/flow) в `docs/ARCHITECTURE.md`.
+- [x] **Зафиксировать архитектуру как публичный артефакт** — схема пути данных (sequence/flow) в `docs/ARCHITECTURE.md`.
 
 ### 🟡 Средний приоритет
 
-- [ ] **Мультипровайдерность** — legacy захардкожен на OpenAI `responses.create`; исходное задание прямо предлагает адаптацию под GigaChat/YandexGPT. Переиспользовать готовый адаптер из арсенала лаборатории.
-- [ ] **Промпт в файле** — legacy-промпт захардкожен в `processor.py`; вынести в `prompts/v1/system.md` (паттерн runtime-config, mtime-кеш).
-- [ ] **Единый docker-compose** — legacy: два отдельных репозитория/композа; для самодостаточного публичного доставляемого — единый compose (site + db + worker) с общим `WORKER_API_TOKEN`.
-- [ ] **`/health` эндпоинты** — отсутствуют и на сайте, и у обработчика; добавить для Deployment Validation.
+- [x] **Мультипровайдерность** — legacy захардкожен на OpenAI `responses.create`; реализован единый адаптер Chat Completions (OpenAI/GigaChat/YandexGPT/«Свой»).
+- [x] **Промпт в файле** — legacy-промпт захардкожен в `processor.py`; вынесен в `prompts/v1/system.md` (mtime-кеш runtime-config).
+- [x] **Единый docker-compose** — единый compose (site + db + worker) с общим `WORKER_API_TOKEN`.
+- [x] **`/health` эндпоинты** — добавлены на сайте и у обработчика (heartbeat) для Deployment Validation.
 
 ### 🟢 Низкий приоритет
 
-- [ ] **Server-side фильтр `?status=new`** — legacy тянет ВСЕ отзывы каждые 10с и фильтрует клиентски; серверный фильтр снизит нагрузку.
-- [ ] **Auth-симметрия** — legacy: `POST /api/reviews` и чтение открыты, токен-guard только на `PATCH`; любой может спамить отзывы/ответы.
-- [ ] **Мёртвое поле `response`** — колонка `Review.response` существует, но обработчик пишет ответ как дочерний комментарий и никогда не заполняет `response`; поле не используется.
+- [x] **Server-side фильтр `?status=new`** — реализован серверный фильтр вместо клиентского по полному списку.
+- [x] **Auth-симметрия** — `POST /api/reviews` и чтение открыты (legacy-модель доступа); токен-guard на `PATCH` (воркер); демо-RBAC на `/admin`. RBAC на публичную запись отложен в v1.0 (см. SECURITY_NOTES).
+- [x] **Мёртвое поле `response`** — колонка `Review.response` зарезервирована; ответ публикуется дочерним комментарием (threaded-структура).
 
 ---
 
 ## 🛒 3. Market Validation
 
-- Проект создан как портфельный кейс (курс промпт-инжиниринга) — демонстрация паттерна «парсер + автономная AI-обработка 24/7».
+- Проект создан как портфельный кейс — демонстрация паттерна «парсер + автономная AI-обработка 24/7».
 - Паттерн универсален: отзывы интернет-магазинов, отклики на фриланс-заказы (скрипт собирает → нейросеть проверяет соответствие навыкам → отклик за 10–15 с), любая задача «сбор данных + AI-реакция».
 - Реалистичная область — НЕ парсинг Ozon/Wildberries (защита от ботов), а собственные сайты и официальные API маркетплейсов (API продавца).
 
@@ -84,80 +86,69 @@
 
 | Риск | Вероятность | Влияние | Митигация |
 |------|-------------|--------|------------|
-| Захардкожен один провайдер (OpenAI) | Высокая | Среднее | Мультипровайдерность (готовый адаптер из арсенала лаборатории) |
-| Промпт в коде — сложно варьировать | Высокая | Среднее | Вынести в `prompts/v1/system.md` |
-| Два отдельных compose — сложно воспроизвести | Средняя | Среднее | Единый compose + DEPLOYMENT_GUIDE |
-| Нет `/health` — Deployment Validation затруднена | Высокая | Высокое | Добавить health-эндпоинты |
-| Auth-асимметрия — открытые POST/чтение | Средняя | Среднее | Токен на запись ответов; документировать |
-| Качество ответа зависит от промпта/модели | Средняя | Среднее | Версионирование промптов, fallback |
+| Захардкожен один провайдер (legacy) | — | — | ✅ Митигировано: мультипровайдерность (единый адаптер Chat Completions) |
+| Промпт в коде — сложно варьировать (legacy) | — | — | ✅ Митигировано: `prompts/v1/system.md` + override через `/admin` |
+| Два отдельных compose (legacy) — сложно воспроизвести | — | — | ✅ Митигировано: единый compose + DEPLOYMENT_GUIDE |
+| Нет `/health` (legacy) — Deployment Validation затруднена | — | — | ✅ Митигировано: health-эндпоинты добавлены |
+| Auth-асимметрия — открытые POST/чтение | Средняя | Среднее | Документировано; RBAC на публичную запись отложен в v1.0 |
+| Качество ответа зависит от промпта/модели | Средняя | Среднее | Версионирование промптов, fallback, execution-tracing метрик LLM |
 
 ---
 
 ## 🔧 5. Key Technology Areas
 
-**Компетенции (legacy, as-built):**
+**Компетенции:**
 
 | Область | Компетенция | Статус |
 |---------|-------------|--------|
-| FastAPI + PostgreSQL | SQLAlchemy 2.x async, asyncpg, самоссылка parent_id | ✅ Legacy |
-| Async-поллер | asyncio + httpx, интервал опроса, ожидание сайта | ✅ Legacy |
-| Классификация тона | Словарь маркеров (без LLM) | ✅ Legacy |
-| LLM-генерация ответа | OpenAI `responses.create` + fallback | ✅ Legacy (один провайдер) |
-| Идемпотентность | Локальный `state.json` (notified/processed) + статус на сайте | ✅ Legacy |
-| Telegram-уведомления | Bot API sendMessage | ✅ Legacy |
-| Защита от self-reply | Проверка `is_ai_authored` по имени + mark-processed | ✅ Legacy |
-| Контейнеризация | Docker Compose (раздельные) | ⚠️ Требует объединения |
-
-**Дефициты / открытые вопросы:**
-
-| Вопрос | Категория | Примечание |
-|--------|-----------|------------|
-| Мультипровайдерность | LLM | ⏳ Один провайдер; исходное задание предлагает GigaChat/YandexGPT |
-| Промпт в файле | Промпт-инженерия | ⏳ Захардкожен в `processor.py` |
-| Единый compose + DEPLOYMENT_GUIDE | Инфраструктура | ⏳ Два раздельных репозитория |
-| `/health` | Инфраструктура | ⏳ Отсутствует |
-| Server-side фильтр `?status=new` | Производительность | ⏳ Клиентский фильтр по полному списку |
-| Auth-симметрия | Безопасность | ⏳ POST/чтение открыты |
-| Мёртвое поле `response` | Модель данных | ⏳ Колонка не заполняется |
+| FastAPI + PostgreSQL | SQLAlchemy 2.x async, asyncpg, самоссылка parent_id | ✅ |
+| Async-поллер | asyncio + httpx, интервал опроса, ожидание сайта | ✅ |
+| Классификация тона | Словарь маркеров (без LLM) | ✅ |
+| LLM-генерация ответа | Chat Completions: OpenAI/GigaChat/YandexGPT + fallback | ✅ Мультипровайдерность |
+| Идемпотентность | Локальный `state.json` (notified/processed) + статус на сайте | ✅ |
+| Telegram-уведомления | Bot API sendMessage | ✅ |
+| Защита от self-reply | Проверка `is_ai_authored` по имени + mark-processed | ✅ |
+| Контейнеризация | Docker Compose (единый) | ✅ |
+| Runtime-config | `/admin` → `config.json` (shared volume), hot-reload по mtime | ✅ |
+| Observability | stdout-логирование + execution-tracing + аудит | ✅ |
 
 ---
 
 ## ✅ 6. Decision
 
-**Принято (предлагается):** продолжить как публичный портфолио-кейс в стиле лаборатории — взять legacy преподавателя как референс, доработать до самодостаточного публичного репозитория с APL-документацией и Deployment Validation.
+**Принято:** продолжить как публичный портфолио-кейс — взять legacy-репозитории как референс, доработать до самодостаточного публичного репозитория с инженерной документацией и Deployment Validation.
 
-**Предлагаемые решения (финализируются в SPEC):**
+**Реализованные решения:**
 
 - База — legacy-архитектура (сайт + обработчик), доработка по направлениям §2.
-- Мультипровайдерность: OpenAI / GigaChat (OAuth-адаптер) / YandexGPT — переиспользовать готовый адаптер из арсенала лаборатории. Смена провайдера через web-`/admin` в runtime, без рестарта.
-- Web-`/admin` на сайте (портфолио-стиль лаборатории): provider, model, base_url, yandex_folder_id, system_prompt_override → `config.json` в shared volume; обработчик hot-reload'ит по mtime. Секреты остаются в `.env`.
-- Промпт вынести из `processor.py` в `prompts/v1/system.md`; override через `/admin`.
+- Мультипровайдерность: OpenAI / GigaChat (OAuth-адаптер) / YandexGPT — единый адаптер Chat Completions. Смена провайдера через web-`/admin` в runtime, без рестарта.
+- Web-`/admin` на сайте (портфолио-стиль): provider, model, base_url, yandex_folder_id, system_prompt_override → `config.json` в shared volume; обработчик hot-reload'ит по mtime. Секреты остаются в `.env`.
+- Промпт вынесен из `processor.py` в `prompts/v1/system.md`; override через `/admin`.
 - Единый `docker-compose.yml` (site + db + worker) с общим `WORKER_API_TOKEN` + `/health` — для воспроизводимого Deployment Validation.
-- Архитектуру пути данных зафиксировать в `docs/ARCHITECTURE.md` (sequence-схема).
-- Публичный репозиторий — отдельное решение после разработки.
-
-**Открытый вопрос (на утверждение):** объём доработки — минимальный (только deploy + тест 3 отзывов, как буквальное дополнительное задание) vs полный объём доработки (мультипровайдерность + промпт-в-файле + единый compose + health + документация + Deployment Validation). См. вопрос к пользователю.
+- Архитектура пути данных зафиксирована в `docs/ARCHITECTURE.md` (sequence-схема).
+- Три контура observability: stdout-логирование (`LOG_LEVEL`), execution-tracing (`/admin/executions`), аудит (`/admin/audit`).
+- Публичный репозиторий + живое демо за обратным прокси.
 
 ---
 
 ## 🚀 7. Next Steps
 
-### Ближайшие (утверждение направления)
+### Завершённые этапы
 
-1. ~~Утвердить объём доработки~~ — выбран полный объём доработки.
-2. ~~Написать `docs/SPEC.md`~~ — продуктовая спецификация готова.
-3. Написать `docs/IMPLEMENTATION_PLAN.md` — технический план (архитектура, компоненты, модель данных, интеграции, критерии готовности).
+1. ~~Утвердить объём доработки~~ — выбран полный объём.
+2. ~~`docs/IMPLEMENTATION_PLAN.md`~~ — технический план готов.
+3. ~~Реализовать доработанную версию~~ — сайт + обработчик.
+4. ~~Единый `docker-compose.yml` + `DEPLOYMENT_GUIDE.md` + `/health`~~.
+5. ~~`docs/ARCHITECTURE.md`~~ — архитектура пути данных зафиксирована.
+6. ~~Deployment Validation в чистом окружении~~ — 17/17 PASS.
+7. ~~Публичный репозиторий + живое демо~~ — github.com/AlexLvGulyaev/review-auto-responder, https://review-auto-responder.alex-n8n.site.
+8. ~~Observability~~ — три контура реализованы и верифицированы.
 
-### Разработка
+### Возможное развитие (за границей v1.0)
 
-4. Реализовать доработанную версию (сайт + обработчик) в каталоге кейса.
-5. Единый `docker-compose.yml` + `DEPLOYMENT_GUIDE.md` + `/health`.
-6. Зафиксировать архитектуру пути данных в `docs/ARCHITECTURE.md`.
-
-### Публикация
-
-7. Deployment Validation в чистом окружении.
-8. Публичный репозиторий + отчёт по ДЗ + сопроводительное письмо куратору.
+- RBAC / токенизация с квотой на публичную форму `POST /api/reviews` (см. SECURITY_NOTES §3–4).
+- CA-bundle для GigaChat на production вместо `ssl.CERT_NONE`.
+- Схлопывание execution-tracing в один POST (create-with-steps) при росте объёмов.
 
 ---
 
@@ -168,7 +159,7 @@
 | Тестовый сайт отзывов | Цель опроса; источник новых отзывов, приёмник ответов | Блокирует весь поток |
 | LLM-провайдер | Генерация ответа (OpenAI/GigaChat/YandexGPT) | Fallback на словарные шаблоны при сбое/отсутствии ключа |
 | Telegram Bot API | Уведомления оператора | Опционально; без токена — пропуск |
-| PostgreSQL | Хранилище отзывов сайта | Блокирует сайт |
+| PostgreSQL | Хранилище отзывов сайта + таблицы observability | Блокирует сайт |
 | VPS / Docker Host | Развёртывание 24/7 | Блокирует публичный деплой |
 
 ---
@@ -177,14 +168,13 @@
 
 | Дата | Статус | Примечание |
 |------|--------|------------|
-| 2026-08-13 | Старт кейса | Legacy-репозитории преподавателя клонированы как референс (публичные репозитории github.com/MrGAN12009); зафиксировано исходное задание |
-| 2026-08-13 | Анализ архитектуры | Восставлена as-built архитектура: путь данных, файлы по этапам, взаимодействие client/processor/worker, роль state-файла; выявлены дефициты и точки доработки |
-| 2026-08-13 | PROJECT_STATE | Зафиксировано состояние и предложено направление доработки (портфолио-стиль лаборатории) |
-| 2026-08-13 | SPEC | Направление утверждено (полный объём доработки); подготовлена продуктовая спецификация `docs/SPEC.md`; жизненный цикл восстановлен |
-| 2026-08-13 | IMPLEMENTATION_PLAN | Утверждён web-`/admin` runtime-config (портфолио-стиль лаборатории); SPEC/PLAN обновлены (F-SITE-8, F-WORK-13, config.json, shared volume); технический план готов к разработке |
-| 2026-08-13 | Разработка | Реализованы review-site (FastAPI + PostgreSQL, `/admin` демо-RBAC) и review-worker (мультипровайдер, runtime-config, heartbeat); единый `docker-compose.yml`; APL-документация. Исправлены: `python-multipart`, баг серверного фильтра `?status` (alias) |
+| 2026-08-13 | Старт кейса | Legacy-репозитории-референсы клонированы (публичные репозитории github.com/MrGAN12009); зафиксированы исходные требования |
+| 2026-08-13 | Анализ архитектуры | Восстановлена as-built архитектура: путь данных, файлы по этапам, взаимодействие client/processor/worker, роль state-файла; выявлены дефициты и точки доработки |
+| 2026-08-13 | PROJECT_STATE | Зафиксировано состояние и предложено направление доработки (портфолио-стиль) |
+| 2026-08-13 | IMPLEMENTATION_PLAN | Утверждён web-`/admin` runtime-config (портфолио-стиль); технический план готов к разработке |
+| 2026-08-13 | Разработка | Реализованы review-site (FastAPI + PostgreSQL, `/admin` демо-RBAC) и review-worker (мультипровайдер, runtime-config, heartbeat); единый `docker-compose.yml`; инженерная документация. Исправлены: `python-multipart`, баг серверного фильтра `?status` (alias) |
 | 2026-08-13 | Deployment Validation | Чистое окружение (teardown → пересборка по DEPLOYMENT_GUIDE): 17/17 PASS — 3 отзыва разной тональности, switch OpenAI↔GigaChat без рестарта (реальный ответ GigaChat), демо-RBAC 403/401, fallback, healthcheck-и |
-| 2026-08-13 | Портфельный актив | Публичный репозиторий опубликован (github.com/AlexLvGulyaev/review-auto-responder); public-boundary соблюдён; отчёт по ДЗ и письмо куратору подготовлены |
+| 2026-08-13 | Портфельный актив | Публичный репозиторий опубликован (github.com/AlexLvGulyaev/review-auto-responder); public-boundary соблюдён |
 | 2026-08-13 | Публичное демо | Живое демо развёрнуто за Traefik (TLS) на https://review-auto-responder.alex-n8n.site: router+service в dynamic.yml, review-site в сети прокси (override, gitignored), GigaChat верифицирован реальным ответом на публичном эндпоинте; DEPLOYMENT_GUIDE §8 дополнен production-разделом |
 | 2026-08-13 | Observability | Три контура: stdout-логирование (`LOG_LEVEL`, dictConfig, приглушённые httpx/openai), execution-tracing (`execution_sessions`+`execution_steps`, воркер пишет через API сайта, `/admin/executions` с LLM-метриками provider/model/latency_ms/tokens/fallback_reason), аудит (`audit_logs`, `/admin/audit`, события login/config/rbac/worker_denied). Верифицировано на живом демо (GigaChat: tokens=192, latency_ms=663); коммит `8e61c5e` в origin/main; public-boundary кода очищен |
 
@@ -192,7 +182,11 @@
 
 ## 📚 Связанные документы
 
-- [🏠 `README.md`](../README.md) — главная страница проекта (предстоит).
-- [📋 `docs/SPEC.md`](SPEC.md) — продуктовая спецификация.
-- [📋 `docs/IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) — план реализации (предстоит).
-- [🏗️ `docs/ARCHITECTURE.md`](ARCHITECTURE.md) — архитектура и путь данных (предстоит).
+- [🏠 `README.md`](../README.md) — главная страница проекта.
+- [📋 `docs/IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) — план реализации.
+- [🏗️ `docs/ARCHITECTURE.md`](ARCHITECTURE.md) — архитектура и путь данных.
+- [🔌 `docs/API_CONTRACT.md`](API_CONTRACT.md) — контракты HTTP API.
+- [🤖 `docs/EXTERNAL_PROVIDERS.md`](EXTERNAL_PROVIDERS.md) — параметры LLM-провайдеров.
+- [🛡️ `docs/SECURITY_NOTES.md`](SECURITY_NOTES.md) — безопасность и демо-RBAC.
+- [🚀 `docs/DEPLOYMENT_GUIDE.md`](DEPLOYMENT_GUIDE.md) — развёртывание с нуля.
+- [✅ `docs/DEPLOYMENT_VALIDATION_REPORT.md`](DEPLOYMENT_VALIDATION_REPORT.md) — отчёт воспроизводимости.

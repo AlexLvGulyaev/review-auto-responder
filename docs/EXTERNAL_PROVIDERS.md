@@ -40,12 +40,12 @@
 - **Auth:** **нельзя** использовать authorization key как статический `api_key`. Нужен обмен authorization key → access token: `POST https://ngw.devices.sberbank.ru:9443/api/v2/oauth`, `Authorization: Basic <auth_key>`, scope `GIGACHAT_API_PERS`; access token (~30 мин) — как `Bearer` в `/chat/completions`.
 - **Refresh скрыт:** адаптер `worker/providers/gigachat_adapter.py` запрашивает свежий token **перед каждым запросом** (`_get_access_token`), ручного обновления оператором не требуется.
 - **TLS:** сертификат Минцифры РФ. `GIGACHAT_CA_BUNDLE` — проверка; пусто — `ssl.CERT_NONE` (dev/демо; для prod — Russian Trusted Root CA bundle).
-- **Реализация:** `gigachat_adapter.py` (синхронный urllib) + `gigachat_provider.py` (async-обёртка через `asyncio.to_thread`). Адаптер ранее разработан в арсенале лаборатории и переиспользован здесь.
+- **Реализация:** `gigachat_adapter.py` (синхронный urllib) + `gigachat_provider.py` (async-обёртка через `asyncio.to_thread`). Прямые HTTP-запросы без внешних SDK.
 - **Секрет:** `GIGACHAT_AUTH_KEY` в `.env`.
 
 ### 🧪 Статус верификации
 
-- **GigaChat** — end-to-end верифицирован реальным authorization key (сверка с секретом соседнего кейса лаборатории): OAuth-обмен + `/chat/completions` → корректный ответ на отзыв. Без ключа — `ProviderNotConfigured` → fallback (не падение).
+- **GigaChat** — end-to-end верифицирован реальным authorization key: OAuth-обмен + `/chat/completions` → корректный ответ на отзыв. Без ключа — `ProviderNotConfigured` → fallback (не падение).
 
 ---
 
