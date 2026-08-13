@@ -83,10 +83,20 @@
     </div>
   </div>
 
-  <div class="ai-section-box" style="margin-bottom:12px;">
+  <div class="ai-section-box ai-section-box--timeline" style="margin-bottom:12px;">
     <h4 class="ai-section-box__title">Таймлайн пайплайна</h4>
     {% if s.steps %}
     <div class="ai-pipeline">
+      {# Нулевая стадия — получение отзыва (зеркально «Цепочке этапов»: «Получен отзыв → …»).
+         Это не шаг воркера, а момент старта сессии = started_at; без длительности и JSON. #}
+      <div class="ai-pipeline__step">
+        <div class="ai-pipeline__step-head">
+          <span class="ai-step__time">{{ s.started_at.strftime('%Y-%m-%d %H:%M:%S') if s.started_at else '—' }}</span>
+          <span class="ai-status ai-status--muted">получен</span>
+          <span class="ai-step__name">Получен отзыв</span>
+          <span class="ai-step__dur">—</span>
+        </div>
+      </div>
       {# Поэтапное датавремя: started_at сессии + накопленная длительность предыдущих шагов
          (воркер не пишет step.started_at — только duration_ms, поэтому время реконструируется). #}
       {% set ns = namespace(off=0) %}
@@ -199,9 +209,9 @@
 
   {# ── Правая панель: pre-render деталей всех сессий страницы ─────────────── #}
   {% if sessions %}
-  <div class="ai-detail-panel-wrap" style="flex:1;min-width:0;height:100%;overflow-y:auto;">
+  <div class="ai-detail-panel-wrap" style="flex:1;min-width:0;height:100%;overflow:hidden;display:flex;flex-direction:column;">
     {% for s in sessions %}
-    <section id="ai-detail-{{ s.id }}" class="ai-card ai-detail-panel" style="display:{{ 'block' if selected_id == s.id else 'none' }}">
+    <section id="ai-detail-{{ s.id }}" class="ai-card ai-detail-panel" style="display:{{ 'flex' if selected_id == s.id else 'none' }}">
       {{ detail_panel(s, reviews_map.get(s.review_id), replies_map.get(s.review_id)) }}
     </section>
     {% endfor %}
@@ -224,7 +234,7 @@
     cards.forEach(function(c){
       c.classList.toggle('ai-log-card--active', c.getAttribute('data-id') === id);
     });
-    ids.forEach(function(i){ var el = panelEl(i); if(el) el.style.display = (i === id) ? 'block' : 'none'; });
+    ids.forEach(function(i){ var el = panelEl(i); if(el) el.style.display = (i === id) ? 'flex' : 'none'; });
     if(!opts.skipHistory){
       // Сохраняем все текущие параметры (включая offset), меняем только selected.
       var p = new URLSearchParams(window.location.search);

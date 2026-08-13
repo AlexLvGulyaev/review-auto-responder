@@ -64,10 +64,20 @@
     </div>
   </div>
 
-  <div class="ai-section-box" style="margin-bottom:12px;">
+  <div class="ai-section-box ai-section-box--timeline" style="margin-bottom:12px;">
     <h4 class="ai-section-box__title">Таймлайн пайплайна</h4>
     {% if session.steps %}
     <div class="ai-pipeline">
+      {# Нулевая стадия — получение отзыва (зеркально «Цепочке этапов»). Не шаг воркера,
+         а момент старта сессии = started_at; без длительности и JSON. #}
+      <div class="ai-pipeline__step">
+        <div class="ai-pipeline__step-head">
+          <span class="ai-step__time">{{ session.started_at.strftime('%Y-%m-%d %H:%M:%S') if session.started_at else '—' }}</span>
+          <span class="ai-status ai-status--muted">получен</span>
+          <span class="ai-step__name">Получен отзыв</span>
+          <span class="ai-step__dur">—</span>
+        </div>
+      </div>
       {% set ns = namespace(off=0) %}
       {% for step in session.steps %}
       {% set step_ts = session.started_at + timedelta(milliseconds=ns.off) if session.started_at else None %}

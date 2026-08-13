@@ -316,6 +316,13 @@
     .ai-master-detail--fill { flex: 1 1 auto; min-height: 0; align-items: stretch; overflow: hidden; }
     .ai-master-detail--fill .ai-list-panel { position: static; max-height: none; height: 100%; }
     .ai-detail-panel-wrap { min-height: 0; }
+    /* В --fill правая панель — flex-колонка до низа, без собственного макро-скролла.
+       Таймлайн (flex:1) забирает остаток высоты и скроллится ВНУТРИ себя, когда
+       содержимое не влезает; остальные секции — натуральной высоты. */
+    .ai-master-detail--fill .ai-detail-panel { height: 100%; min-height: 0; flex-direction: column; overflow: hidden; }
+    .ai-master-detail--fill .ai-section-box--timeline { flex: 1 1 auto; min-height: 0; overflow: hidden;
+      display: flex; flex-direction: column; }
+    .ai-master-detail--fill .ai-section-box--timeline .ai-pipeline { max-height: none; flex: 1 1 auto; min-height: 0; }
     .ai-list-panel { width: 420px; flex-shrink: 0; position: sticky; top: 84px;
       max-height: calc(100vh - 100px); display: flex; flex-direction: column; overflow: hidden; }
     .ai-list-panel__filters { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }

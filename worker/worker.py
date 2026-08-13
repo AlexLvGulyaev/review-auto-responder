@@ -202,7 +202,9 @@ async def process_review(review) -> None:
         s = time.perf_counter()
         state.mark_processed(ai_reply.id)
         state.mark_processed(review.id)
-        steps.append({**_step("mark_processed", 5, s)})
+        steps.append({**_step("mark_processed", 5, s),
+                       "step_metadata": {"review_id": review.id, "reply_id": ai_reply.id,
+                                          "status": "processed"}})
 
         logger.info("Review id=%s processed", review.id)
         await client.finish_execution(
