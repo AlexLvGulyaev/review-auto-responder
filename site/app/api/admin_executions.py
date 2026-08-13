@@ -1,23 +1,28 @@
 """Admin-панель execution-трейсов — read-only просмотр сессий обработки.
 
-`GET /admin/executions` — список с фильтрами; `GET /admin/executions/{id}` —
-детали со шагами. Auth: `admin_auth` (demo-токен допущен — только просмотр,
-как остальные `/admin`-чтения). Просмотры не аудируются (avoid self-noise).
+`GET /admin/executions` — список с фильтрами (period/status/tone + поиск по
+review_id); `GET /admin/executions/{id}` — детали со шагами. Бизнес-контент
+отзыва (запрос пользователя, ответ системы, тональность) живёт в `reviews` —
+роут eager-грузит его для карточек и правой панели. Auth: `admin_auth` (demo-токен
+допущен — только просмотр, как остальные `/admin`-чтения). Просмотры не аудируются
+(avoid self-noise).
 """
 from __future__ import annotations
 
-from datetime import datetime, time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.admin import admin_auth
 from app.db.session import get_db_session
 from app.models.execution import ExecutionSession
+from app.models.review import Review
 
 
 BASE_DIR = Path(__file__).resolve().parents[2]
@@ -25,43 +30,41 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "app" / "templates"))
 router = APIRouter(prefix="/admin/executions", tags=["admin-executions"])
 
 
-def _parse_date(value: str | None, end_of_day: bool = False) -> datetime | None:
-    if not value:
-        return None
-    try:
-        d = datetime.strptime(value, "%Y-%m-%d")
-        return datetime.combine(d, time.max) if end_of_day else d
-    except ValueError:
-        raise HTTPException(status_code=400, detail=f"Invalid date: {value}")
+# Период-фильтр → cutoff (UTC). None/"all" → без фильтра.
+_PERIOD_DELTAS = {
+    "24h": timedelta(hours=24),
+    "7d": timedelta(days=7),
+    "30d": timedelta(days=30),
+}
 
 
 @router.get("", response_class=HTMLResponse)
 async def list_executions(
     request: Request,
-    review_id: int | None = Query(default=None),
+    review_id: str | None = Query(default=None),
     status_filter: str | None = Query(default=None, alias="status"),
-    provider: str | None = Query(default=None),
-    date_from: str | None = Query(default=None),
-    date_to: str | None = Query(default=None),
+    period: str | None = Query(default=None),
+    tone: str | None = Query(default=None),
     selected: int | None = Query(default=None),
-    limit: int = Query(default=20, ge=1, le=200),
+    limit: int = Query(default=7, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     db: AsyncSession = Depends(get_db_session),
     identity=Depends(admin_auth),
 ) -> HTMLResponse:
-    stmt = select(ExecutionSession)
-    if review_id is not None:
-        stmt = stmt.where(ExecutionSession.review_id == review_id)
+    # Поиск по id отзыва — str, чтобы пустое поле формы (review_id=") не давало 422.
+    review_id_int = int(review_id.strip()) if review_id and review_id.strip().isdigit() else None
+    stmt = select(ExecutionSession).options(selectinload(ExecutionSession.steps))
+    if review_id_int is not None:
+        stmt = stmt.where(ExecutionSession.review_id == review_id_int)
     if status_filter:
         stmt = stmt.where(ExecutionSession.status == status_filter)
-    if provider:
-        stmt = stmt.where(ExecutionSession.provider_key == provider)
-    started_from = _parse_date(date_from)
-    started_to = _parse_date(date_to, end_of_day=True)
-    if started_from:
-        stmt = stmt.where(ExecutionSession.started_at >= started_from)
-    if started_to:
-        stmt = stmt.where(ExecutionSession.started_at <= started_to)
+    delta = _PERIOD_DELTAS.get(period) if period else None
+    if delta is not None:
+        stmt = stmt.where(ExecutionSession.started_at >= datetime.now(timezone.utc) - delta)
+    if tone:
+        # Тональность живёт на reviews — inner join (сессии без review при tone-фильтре
+        # корректно отбрасываются: без отзыва нет тональности).
+        stmt = stmt.join(Review, Review.id == ExecutionSession.review_id).where(Review.tone == tone)
 
     count_stmt = select(func.count()).select_from(stmt.subquery())
     total = await db.scalar(count_stmt) or 0
@@ -70,12 +73,22 @@ async def list_executions(
     result = await db.execute(stmt)
     sessions = result.scalars().unique().all()
 
-    # Master-detail: выбранная сессия для правой панели. Если selected не задан —
-    # дефолтно первая запись текущей страницы (правая панель не пуста, как в эталоне).
-    selected_id = selected
-    if selected_id is None and sessions:
-        selected_id = sessions[0].id
-    selected_session = await db.get(ExecutionSession, selected_id) if selected_id is not None else None
+    # Eager-загрузка бизнеса: исходный отзыв (запрос + тональность) и дочерний
+    # ответ системы (Review где parent_id = review_id). Для карточек нужна тональность
+    # и текст отзыва; для правой панели — запрос и ответ. Pre-render 7 деталей.
+    review_ids = [s.review_id for s in sessions if s.review_id is not None]
+    reviews_map: dict[int, Review] = {}
+    replies_map: dict[int, Review] = {}
+    if review_ids:
+        rres = await db.execute(select(Review).where(Review.id.in_(review_ids)))
+        for r in rres.scalars():
+            reviews_map[r.id] = r
+        cres = await db.execute(select(Review).where(Review.parent_id.in_(review_ids)))
+        for c in cres.scalars():
+            replies_map[c.parent_id] = c
+
+    # Master-detail: дефолтно первая запись (правая панель не пуста на входе).
+    selected_id = selected if selected is not None else (sessions[0].id if sessions else None)
 
     return templates.TemplateResponse(
         "executions.html",
@@ -88,13 +101,13 @@ async def list_executions(
             "limit": limit,
             "offset": offset,
             "selected_id": selected_id,
-            "selected_session": selected_session,
+            "reviews_map": reviews_map,
+            "replies_map": replies_map,
             "filters": {
                 "review_id": review_id,
                 "status": status_filter,
-                "provider": provider,
-                "date_from": date_from,
-                "date_to": date_to,
+                "period": period,
+                "tone": tone,
             },
         },
     )
@@ -111,7 +124,22 @@ async def execution_detail(
     if session is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Execution session not found.")
     # steps загружены lazy="selectin" — доступны без явного запроса.
+    # Бизнес: исходный отзыв (запрос + тональность) и дочерний ответ системы.
+    review = await db.get(Review, session.review_id) if session.review_id is not None else None
+    reply = None
+    if session.review_id is not None:
+        rres = await db.execute(
+            select(Review).where(Review.parent_id == session.review_id).limit(1)
+        )
+        reply = rres.scalars().first()
     return templates.TemplateResponse(
         "execution_detail.html",
-        {"request": request, "identity": identity, "is_demo": identity.is_demo, "session": session},
+        {
+            "request": request,
+            "identity": identity,
+            "is_demo": identity.is_demo,
+            "session": session,
+            "review": review,
+            "reply": reply,
+        },
     )

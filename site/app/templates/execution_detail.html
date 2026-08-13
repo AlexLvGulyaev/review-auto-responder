@@ -6,33 +6,50 @@
 
 {% block content %}
 
-{# status-бейдж (тот же макрос, что в list-странице — дублируем, т.к. макросы не наследуются). #}
+{# Макросы (дублируем из executions.html — макросы не наследуются). #}
 {% macro status_badge(status_val) -%}
 <span class="ai-status {% if status_val == 'ok' %}ai-status--ok{% elif status_val == 'error' %}ai-status--error{% else %}ai-status--warning{% endif %}">{% if status_val == 'ok' %}успешно{% elif status_val == 'error' %}ошибка{% else %}ожидание{% endif %}</span>
 {%- endmacro %}
 
+{% macro tone_badge(tone_val) -%}
+{% if tone_val == 'positive' %}<span class="ai-status ai-status--ok">положительный</span>{% elif tone_val == 'negative' %}<span class="ai-status ai-status--error">отрицательный</span>{% elif tone_val == 'neutral' %}<span class="ai-status ai-status--muted">нейтральный</span>{% else %}<span class="ai-status ai-status--muted">—</span>{% endif %}
+{%- endmacro %}
+
+{% macro stage_label(name) -%}
+{% if name == 'detect_tone' %}Классификация тона{% elif name == 'telegram' %}Уведомление Telegram{% elif name == 'llm_call' %}Генерация LLM{% elif name == 'persist_reply' %}Сохранение ответа{% elif name == 'mark_processed' %}Отметка обработано{% else %}{{ name }}{% endif %}
+{%- endmacro %}
+
+{% set tone = review.tone if review else None %}
 <section class="ai-card ai-detail-panel">
   <div class="ai-detail-head">
     <h2 class="ai-section__title">ДЕТАЛИЗАЦИЯ ЗАПРОСА</h2>
-    {{ status_badge(session.status) }}
+    <div>{{ status_badge(session.status) }}{{ tone_badge(tone) }}</div>
+  </div>
+
+  <div class="ai-section-box" style="margin-bottom:12px;">
+    <h4 class="ai-section-box__title">Цепочка этапов</h4>
+    <p class="ai-chain">Получен отзыв{% for step in session.steps %} → {{ stage_label(step.stage_name) }}{% endfor %}</p>
   </div>
 
   <div class="ai-grid ai-grid--2" style="margin-bottom:12px;">
     <div class="ai-section-box">
-      <h4 class="ai-section-box__title">Параметры запроса</h4>
-      <div class="ai-compact-row"><span class="ai-compact-row__label">Отзыв</span><span class="ai-compact-row__value">{% if session.review_id %}#{{ session.review_id }}{% else %}—{% endif %}</span></div>
-      <div class="ai-compact-row"><span class="ai-compact-row__label">Маршрут</span><span class="ai-compact-row__value">{{ session.route or '—' }}</span></div>
-      <div class="ai-compact-row"><span class="ai-compact-row__label">Начало</span><span class="ai-compact-row__value">{{ session.started_at.strftime('%Y-%m-%d %H:%M:%S') if session.started_at else '—' }}</span></div>
-      <div class="ai-compact-row"><span class="ai-compact-row__label">Финал</span><span class="ai-compact-row__value">{{ session.finished_at.strftime('%Y-%m-%d %H:%M:%S') if session.finished_at else '—' }}</span></div>
+      <h4 class="ai-section-box__title">Запрос пользователя</h4>
+      <pre class="ai-biz-text">{{ review.text if review and review.text else '—' }}</pre>
     </div>
     <div class="ai-section-box">
-      <h4 class="ai-section-box__title">Параметры исполнения</h4>
-      <div class="ai-compact-row"><span class="ai-compact-row__label">Провайдер</span><span class="ai-compact-row__value">{{ session.provider_key or '—' }}</span></div>
-      <div class="ai-compact-row"><span class="ai-compact-row__label">Модель</span><span class="ai-compact-row__value">{{ session.model_name or '—' }}</span></div>
-      <div class="ai-compact-row"><span class="ai-compact-row__label">Длительность</span><span class="ai-compact-row__value">{% if session.duration_ms is not none %}{{ session.duration_ms }} мс{% else %}—{% endif %}</span></div>
-      <div class="ai-compact-row"><span class="ai-compact-row__label">Шагов</span><span class="ai-compact-row__value">{{ session.steps|length }}</span></div>
-      <div class="ai-compact-row"><span class="ai-compact-row__label">Статус</span><span class="ai-compact-row__value">{{ status_badge(session.status) }}</span></div>
+      <h4 class="ai-section-box__title">Ответ системы</h4>
+      <div class="ai-biz-text">{{ reply.text if reply and reply.text else '—' }}</div>
     </div>
+  </div>
+
+  <div class="ai-section-box" style="margin-bottom:12px;">
+    <h4 class="ai-section-box__title">Параметры исполнения</h4>
+    <div class="ai-compact-row"><span class="ai-compact-row__label">Отзыв</span><span class="ai-compact-row__value">{% if session.review_id %}#{{ session.review_id }}{% else %}—{% endif %}</span></div>
+    <div class="ai-compact-row"><span class="ai-compact-row__label">Провайдер</span><span class="ai-compact-row__value">{{ session.provider_key or '—' }}</span></div>
+    <div class="ai-compact-row"><span class="ai-compact-row__label">Модель</span><span class="ai-compact-row__value">{{ session.model_name or '—' }}</span></div>
+    <div class="ai-compact-row"><span class="ai-compact-row__label">Длительность</span><span class="ai-compact-row__value">{% if session.duration_ms is not none %}{{ session.duration_ms }} мс{% else %}—{% endif %}</span></div>
+    <div class="ai-compact-row"><span class="ai-compact-row__label">Начало</span><span class="ai-compact-row__value">{{ session.started_at.strftime('%Y-%m-%d %H:%M:%S') if session.started_at else '—' }}</span></div>
+    <div class="ai-compact-row"><span class="ai-compact-row__label">Финал</span><span class="ai-compact-row__value">{{ session.finished_at.strftime('%Y-%m-%d %H:%M:%S') if session.finished_at else '—' }}</span></div>
   </div>
 
   <div class="ai-section-box" style="margin-bottom:12px;">
@@ -44,7 +61,7 @@
         <div class="ai-pipeline__step-head">
           <span class="ai-step__time">{{ step.started_at.strftime('%H:%M:%S') if step.started_at else '—' }}</span>
           {{ status_badge(step.status) }}
-          <span class="ai-step__name">{{ step.stage_name }}</span>
+          <span class="ai-step__name">{{ stage_label(step.stage_name) }}</span>
           <span class="ai-step__dur">{% if step.duration_ms is not none %}{{ step.duration_ms }} мс{% else %}—{% endif %}</span>
         </div>
         {% if step.step_metadata %}
@@ -60,11 +77,16 @@
     {% endif %}
   </div>
 
-  {% if session.execution_metadata %}
+  {% set snap = {
+    "id": session.id, "review_id": session.review_id, "status": session.status, "route": session.route,
+    "provider": session.provider_key, "model": session.model_name, "duration_ms": session.duration_ms,
+    "started_at": session.started_at.isoformat() if session.started_at else None,
+    "finished_at": session.finished_at.isoformat() if session.finished_at else None,
+    "execution_metadata": session.execution_metadata,
+  } %}
   <details class="ai-json-collapse">
-    <summary><span class="ai-tooltip">Метаданные сессии (JSON)<span class="ai-tooltip__text">Полный технический снимок метаданных execution-сессии.</span></span></summary>
-    <pre class="ai-pre">{{ session.execution_metadata | tojson(indent=2) }}</pre>
+    <summary><span class="ai-tooltip">Технический снимок (JSON)<span class="ai-tooltip__text">Полный технический снимок сессии обработки.</span></span></summary>
+    <pre class="ai-pre">{{ snap | tojson(indent=2) }}</pre>
   </details>
-  {% endif %}
 </section>
 {% endblock %}
