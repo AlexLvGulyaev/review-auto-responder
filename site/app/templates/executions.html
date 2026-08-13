@@ -193,11 +193,11 @@
         </div>
         <div class="ai-log-card__title">{{ rv.text if rv and rv.text else 'Сессия #' ~ s.id }}</div>
         <div class="ai-log-card__meta">
-          <span>#{{ s.id }}</span>
+          <span>#{{ s.review_id }}</span>
+          <span>·</span>
+          <span>{{ rv.name if rv and rv.name else '—' }}</span>
           <span>·</span>
           <span>{{ tone_label(rv.tone if rv else None) }}</span>
-          <span>·</span>
-          <span>{{ s.route or '—' }}</span>
           {% if s.duration_ms is not none %}<span>·</span><span>{{ s.duration_ms }} мс</span>{% endif %}
         </div>
       </a>

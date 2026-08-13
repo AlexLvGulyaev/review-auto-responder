@@ -469,11 +469,16 @@
 
       <nav class="ai-nav">
         <div class="ai-nav__group">
-          <span class="ai-nav__group-label">Консоли</span>
+          <span class="ai-nav__group-label">Системные настройки</span>
           <div class="ai-nav__items">
             <a class="ai-nav__link {{ 'ai-nav__link--active' if request.path == '/admin' }}" href="/admin">
-              <span class="ai-nav__icon">⚙️</span> Конфиг
+              <span class="ai-nav__icon">⚙️</span> Конфигурация
             </a>
+          </div>
+        </div>
+        <div class="ai-nav__group">
+          <span class="ai-nav__group-label">Операционная консоль</span>
+          <div class="ai-nav__items">
             <a class="ai-nav__link {{ 'ai-nav__link--active' if request.path.startswith('/admin/executions') }}" href="/admin/executions">
               <span class="ai-nav__icon">📜</span> Логи
             </a>
