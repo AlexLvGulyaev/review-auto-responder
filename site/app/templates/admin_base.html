@@ -309,6 +309,64 @@
 
     .ai-divider { height: 1px; background: var(--ai-border); margin: 14px 0; border: none; }
 
+    /* ── Master-detail (Логи / Аудит) ─────────────────────────────────────── */
+    .ai-master-detail { display: flex; gap: 12px; align-items: flex-start; }
+    .ai-list-panel { width: 380px; flex-shrink: 0; position: sticky; top: 84px;
+      max-height: calc(100vh - 100px); display: flex; flex-direction: column; overflow: hidden; }
+    .ai-list-panel__filters { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+    .ai-list-panel__filters .ai-input, .ai-list-panel__filters .ai-select { font-size: 0.8rem; padding: 6px 8px; }
+    .ai-list-panel__filters .ai-field--full { grid-column: 1 / -1; }
+    .ai-list-panel__filters label { font-size: 0.6875rem; }
+    .ai-list-panel__pager { display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      padding: 8px 0; border-top: 1px solid var(--ai-border-subtle); border-bottom: 1px solid var(--ai-border-subtle);
+      font-size: 0.75rem; color: var(--ai-text-muted); margin-bottom: 8px; }
+    .ai-list-panel__pager .ai-pager__info { font-variant-numeric: tabular-nums; }
+    .ai-list-panel__count { display: flex; align-items: center; justify-content: space-between;
+      font-size: 0.72rem; color: var(--ai-text-muted); margin-bottom: 8px; }
+    .ai-list-panel__scroll { flex: 1; min-height: 0; overflow-y: auto; padding-right: 2px;
+      display: flex; flex-direction: column; gap: 8px; }
+    .ai-log-card { display: block; text-decoration: none; color: var(--ai-text);
+      border: 1px solid var(--ai-border); border-radius: var(--ai-radius); padding: 10px 12px;
+      background: var(--ai-surface); transition: border-color 0.15s, background-color 0.15s; cursor: pointer; }
+    .ai-log-card:hover { border-color: var(--ai-primary); text-decoration: none; }
+    .ai-log-card--active { border-color: var(--ai-primary); background-color: rgba(47,123,255,0.12); }
+    .ai-log-card__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+    .ai-log-card__head .muted { font-size: 0.72rem; color: var(--ai-text-muted); font-variant-numeric: tabular-nums; }
+    .ai-log-card__title { font-size: 0.85rem; font-weight: 600; margin-bottom: 4px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ai-log-card__meta { font-size: 0.72rem; color: var(--ai-text-secondary); display: flex; flex-wrap: wrap; gap: 4px 6px; }
+
+    .ai-detail-panel { flex: 1; min-width: 0; }
+    .ai-detail-head { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      padding-bottom: 10px; margin-bottom: 12px; border-bottom: 1px solid var(--ai-border); }
+    .ai-detail-head .ai-section__title { margin: 0; }
+    .ai-section-box { border: 1px solid var(--ai-border-subtle); border-radius: var(--ai-radius);
+      background: var(--ai-surface); padding: 10px 12px; }
+    .ai-section-box__title { font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.04em; color: var(--ai-text-muted); margin: 0 0 8px; }
+    .ai-compact-row { display: grid; grid-template-columns: 7.5rem 1fr; gap: 6px; align-items: baseline;
+      font-size: 0.8rem; line-height: 1.4; min-width: 0; }
+    .ai-compact-row > .ai-compact-row__label { color: var(--ai-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ai-compact-row > .ai-compact-row__value { color: var(--ai-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ai-compact-row > .ai-compact-row__value--mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 0.75rem; }
+
+    .ai-pipeline { display: flex; flex-direction: column; gap: 6px; }
+    .ai-pipeline__step { border: 1px solid var(--ai-border-subtle); border-radius: 8px; background: rgba(0,0,0,0.12); }
+    .ai-pipeline__step-head { display: flex; align-items: center; gap: 8px; padding: 8px 10px; flex-wrap: wrap; }
+    .ai-pipeline__step-head .ai-step__time { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.7rem; color: var(--ai-text-muted); font-variant-numeric: tabular-nums; }
+    .ai-pipeline__step-head .ai-step__name { font-size: 0.8rem; font-weight: 600; }
+    .ai-pipeline__step-head .ai-step__dur { margin-left: auto; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.72rem; color: var(--ai-text); font-variant-numeric: tabular-nums; }
+    .ai-pipeline__step-body { padding: 0 10px 8px; }
+    .ai-pipeline__step-body details > summary { cursor: pointer; font-size: 0.7rem; color: var(--ai-primary); }
+    .ai-pipeline__step-body .ai-pre { margin-top: 6px; max-height: 160px; font-size: 0.7rem; }
+
+    @media (max-width: 1024px) {
+      .ai-master-detail { flex-direction: column; }
+      .ai-list-panel { width: 100%; position: static; max-height: none; }
+    }
+
     .ai-card__head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; }
     .ai-card__head h2 { margin: 0; }
 
@@ -388,10 +446,10 @@
               <span class="ai-nav__icon">⚙️</span> Конфиг
             </a>
             <a class="ai-nav__link {{ 'ai-nav__link--active' if request.path.startswith('/admin/executions') }}" href="/admin/executions">
-              <span class="ai-nav__icon">📈</span> Обсервабилити
+              <span class="ai-nav__icon">📜</span> Логи
             </a>
             <a class="ai-nav__link {{ 'ai-nav__link--active' if request.path.startswith('/admin/audit') }}" href="/admin/audit">
-              <span class="ai-nav__icon">🛡️</span> Аудит
+              <span class="ai-nav__icon">📋</span> Аудит
             </a>
           </div>
         </div>

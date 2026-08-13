@@ -43,7 +43,8 @@ async def list_executions(
     provider: str | None = Query(default=None),
     date_from: str | None = Query(default=None),
     date_to: str | None = Query(default=None),
-    limit: int = Query(default=50, ge=1, le=200),
+    selected: int | None = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     db: AsyncSession = Depends(get_db_session),
     identity=Depends(admin_auth),
@@ -69,6 +70,13 @@ async def list_executions(
     result = await db.execute(stmt)
     sessions = result.scalars().unique().all()
 
+    # Master-detail: выбранная сессия для правой панели. Если selected не задан —
+    # дефолтно первая запись текущей страницы (правая панель не пуста, как в эталоне).
+    selected_id = selected
+    if selected_id is None and sessions:
+        selected_id = sessions[0].id
+    selected_session = await db.get(ExecutionSession, selected_id) if selected_id is not None else None
+
     return templates.TemplateResponse(
         "executions.html",
         {
@@ -79,6 +87,8 @@ async def list_executions(
             "total": total,
             "limit": limit,
             "offset": offset,
+            "selected_id": selected_id,
+            "selected_session": selected_session,
             "filters": {
                 "review_id": review_id,
                 "status": status_filter,

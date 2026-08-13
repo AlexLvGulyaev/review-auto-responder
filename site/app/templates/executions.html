@@ -1,77 +1,150 @@
 {% extends "admin_base.html" %}
 
-{% block title %}Обсервабилити · Админка{% endblock %}
-{% block page_title %}Обсервабилити · трейсы обработки{% endblock %}
-{% block page_subtitle %}Execution-сессии воркера: статус, провайдер/модель, шаги пайплайна{% endblock %}
+{% block title %}Логи · Админка{% endblock %}
+{% block page_title %}Логи{% endblock %}
+{% block page_subtitle %}Трейсы обработки отзывов: статус, провайдер/модель, шаги пайплайна{% endblock %}
+
+{% block page_actions %}
+  <a class="ai-btn ai-btn--secondary ai-btn--small" href="{{ request.url.path }}{% if request.url.query %}?{{ request.url.query }}{% endif %}">↻ Обновить</a>
+{% endblock %}
 
 {% block content %}
-<section class="ai-card">
-  <p class="ai-card__hint">Всего: {{ total }}</p>
 
-  <form method="get" action="/admin/executions" class="ai-filters">
-    <div class="ai-field"><label>review_id</label><input class="ai-input" name="review_id" value="{{ filters.review_id or '' }}" placeholder="ID"></div>
-    <div class="ai-field"><label>status</label>
-      <select class="ai-select" name="status">
-        <option value="">любой</option>
-        <option value="ok" {{ 'selected' if filters.status == 'ok' }}>ok</option>
-        <option value="error" {{ 'selected' if filters.status == 'error' }}>error</option>
-        <option value="started" {{ 'selected' if filters.status == 'started' }}>started</option>
-      </select>
-    </div>
-    <div class="ai-field"><label>provider</label><input class="ai-input" name="provider" value="{{ filters.provider or '' }}" placeholder="gigachat"></div>
-    <div class="ai-field"><label>date_from</label><input class="ai-input" type="date" name="date_from" value="{{ filters.date_from or '' }}"></div>
-    <div class="ai-field"><label>date_to</label><input class="ai-input" type="date" name="date_to" value="{{ filters.date_to or '' }}"></div>
-    <div class="filter-actions">
-      <button type="submit" class="ai-btn ai-btn--small">Применить</button>
-      <a class="ai-btn ai-btn--secondary ai-btn--small" href="/admin/executions">Сбросить</a>
-    </div>
-  </form>
+{# Фильтры (без offset/selected) — для построения ссылок карточек и пагинатора. #}
+{% set pairs = [] %}
+{% for k, v in request.query_params.multi_items() if k not in ('offset', 'selected') %}
+  {% set _ = pairs.append((k, v)) %}
+{% endfor %}
+{% set fqs = pairs | urlencode %}
 
-  {% if sessions %}
-  <table class="ai-table">
-    <thead>
-      <tr><th>ID</th><th>Отзыв</th><th>Статус</th><th>Провайдер</th><th>Модель</th><th>Длительность</th><th>Шаги</th><th>Начало</th></tr>
-    </thead>
-    <tbody>
-    {% for s in sessions %}
-      <tr>
-        <td class="id"><a href="/admin/executions/{{ s.id }}">#{{ s.id }}</a></td>
-        <td class="id">{% if s.review_id %}<a href="/admin/executions?review_id={{ s.review_id }}">#{{ s.review_id }}</a>{% else %}—{% endif %}</td>
-        <td><span class="ai-chip {{ s.status }}">{{ s.status }}</span></td>
-        <td>{{ s.provider_key or '—' }}</td>
-        <td>{{ s.model_name or '—' }}</td>
-        <td class="id">{% if s.duration_ms is not none %}{{ s.duration_ms }} мс{% else %}—{% endif %}</td>
-        <td>
-          <div class="ai-chips">
-          {% for st in s.steps %}
-            <span class="ai-chip {{ st.status }}" title="{{ st.stage_name }} · {{ st.status }}">{{ st.stage_name }}</span>
-          {% endfor %}
-          </div>
-        </td>
-        <td class="muted">{{ s.started_at.strftime('%Y-%m-%d %H:%M:%S') if s.started_at else '—' }}</td>
-      </tr>
-    {% endfor %}
-    </tbody>
-  </table>
+{# Макрос status-бейджа с русскими подписями. #}
+{% macro status_badge(status_val) -%}
+<span class="ai-status {% if status_val == 'ok' %}ai-status--ok{% elif status_val == 'error' %}ai-status--error{% else %}ai-status--warning{% endif %}">{% if status_val == 'ok' %}успешно{% elif status_val == 'error' %}ошибка{% else %}ожидание{% endif %}</span>
+{%- endmacro %}
 
-  <div class="ai-pager">
-    <span>Показано {{ sessions|length }} из {{ total }} (offset {{ offset }})</span>
-    <span>
-      {% set pairs = [] %}
-      {% for k, v in request.query_params.multi_items() if k != 'offset' %}
-        {% set _ = pairs.append((k, v)) %}
-      {% endfor %}
-      {% set qs = pairs | urlencode %}
+<div class="ai-master-detail">
+
+  {# ── Левая панель: фильтры + пагинация + список карточек ────────────────── #}
+  <aside class="ai-list-panel ai-card">
+    <form method="get" action="/admin/executions" class="ai-list-panel__filters">
+      <div class="ai-field ai-field--full"><label>review_id</label><input class="ai-input" name="review_id" value="{{ filters.review_id or '' }}" placeholder="ID отзыва"></div>
+      <div class="ai-field"><label>status</label>
+        <select class="ai-select" name="status">
+          <option value="">любой</option>
+          <option value="ok" {{ 'selected' if filters.status == 'ok' }}>ok</option>
+          <option value="error" {{ 'selected' if filters.status == 'error' }}>error</option>
+          <option value="started" {{ 'selected' if filters.status == 'started' }}>started</option>
+        </select>
+      </div>
+      <div class="ai-field"><label>provider</label><input class="ai-input" name="provider" value="{{ filters.provider or '' }}" placeholder="gigachat"></div>
+      <div class="ai-field"><label>date_from</label><input class="ai-input" type="date" name="date_from" value="{{ filters.date_from or '' }}"></div>
+      <div class="ai-field"><label>date_to</label><input class="ai-input" type="date" name="date_to" value="{{ filters.date_to or '' }}"></div>
+      <div class="ai-field ai-field--full" style="display:flex;gap:8px;">
+        <button type="submit" class="ai-btn ai-btn--small">Применить</button>
+        <a class="ai-btn ai-btn--secondary ai-btn--small" href="/admin/executions">Сбросить</a>
+      </div>
+    </form>
+
+    <div class="ai-list-panel__pager">
       {% if offset > 0 %}
-        <a class="ai-btn ai-btn--secondary ai-btn--small" href="/admin/executions?{{ qs }}&offset={{ max(0, offset - limit) }}">← Назад</a>
+        <a class="ai-btn ai-btn--secondary ai-btn--small" href="?{{ fqs }}{% if fqs %}&{% endif %}offset={{ max(0, offset - limit) }}{% if selected_id %}&selected={{ selected_id }}{% endif %}">← Назад</a>
+      {% else %}
+        <span class="ai-btn ai-btn--secondary ai-btn--small" style="opacity:0.4;pointer-events:none;">← Назад</span>
       {% endif %}
+      <span class="ai-pager__info">Стр. {{ (offset // limit) + 1 }} из {{ ((total + limit - 1) // limit) if total else 1 }}</span>
       {% if offset + limit < total %}
-        <a class="ai-btn ai-btn--secondary ai-btn--small" href="/admin/executions?{{ qs }}&offset={{ offset + limit }}">Вперёд →</a>
+        <a class="ai-btn ai-btn--secondary ai-btn--small" href="?{{ fqs }}{% if fqs %}&{% endif %}offset={{ offset + limit }}{% if selected_id %}&selected={{ selected_id }}{% endif %}">Вперёд →</a>
+      {% else %}
+        <span class="ai-btn ai-btn--secondary ai-btn--small" style="opacity:0.4;pointer-events:none;">Вперёд →</span>
       {% endif %}
-    </span>
-  </div>
+    </div>
+
+    <div class="ai-list-panel__count">
+      <span>Всего {{ total }}</span>
+      <a href="/admin/executions" style="color:var(--ai-primary);font-size:0.72rem;">Сброс</a>
+    </div>
+
+    <div class="ai-list-panel__scroll">
+      {% for s in sessions %}
+      <a class="ai-log-card {{ 'ai-log-card--active' if selected_id == s.id }}" href="?{{ fqs }}{% if fqs %}&{% endif %}offset={{ offset }}&selected={{ s.id }}">
+        <div class="ai-log-card__head">
+          <span class="muted">{{ s.started_at.strftime('%Y-%m-%d %H:%M:%S') if s.started_at else '—' }}</span>
+          {{ status_badge(s.status) }}
+        </div>
+        <div class="ai-log-card__title">Отзыв {% if s.review_id %}#{{ s.review_id }}{% else %}—{% endif %} · {{ s.provider_key or '—' }}</div>
+        <div class="ai-log-card__meta">
+          <span>#{{ s.id }}</span>
+          {% if s.model_name %}<span>·</span><span>{{ s.model_name }}</span>{% endif %}
+          {% if s.duration_ms is not none %}<span>·</span><span>{{ s.duration_ms }} мс</span>{% endif %}
+        </div>
+      </a>
+      {% else %}
+      <div class="ai-empty">Трейсов нет. Отправьте отзыв на <a href="/">главной</a> — воркер создаст сессию обработки.</div>
+      {% endfor %}
+    </div>
+  </aside>
+
+  {# ── Правая панель: детали выбранной сессии ─────────────────────────────── #}
+  {% if selected_session %}
+  <section class="ai-card ai-detail-panel">
+    <div class="ai-detail-head">
+      <h2 class="ai-section__title">ДЕТАЛИЗАЦИЯ ЗАПРОСА</h2>
+      {{ status_badge(selected_session.status) }}
+    </div>
+
+    <div class="ai-grid ai-grid--2" style="margin-bottom:12px;">
+      <div class="ai-section-box">
+        <h4 class="ai-section-box__title">Параметры запроса</h4>
+        <div class="ai-compact-row"><span class="ai-compact-row__label">Отзыв</span><span class="ai-compact-row__value">{% if selected_session.review_id %}#{{ selected_session.review_id }}{% else %}—{% endif %}</span></div>
+        <div class="ai-compact-row"><span class="ai-compact-row__label">Маршрут</span><span class="ai-compact-row__value">{{ selected_session.route or '—' }}</span></div>
+        <div class="ai-compact-row"><span class="ai-compact-row__label">Начало</span><span class="ai-compact-row__value">{{ selected_session.started_at.strftime('%Y-%m-%d %H:%M:%S') if selected_session.started_at else '—' }}</span></div>
+        <div class="ai-compact-row"><span class="ai-compact-row__label">Финал</span><span class="ai-compact-row__value">{{ selected_session.finished_at.strftime('%Y-%m-%d %H:%M:%S') if selected_session.finished_at else '—' }}</span></div>
+      </div>
+      <div class="ai-section-box">
+        <h4 class="ai-section-box__title">Параметры исполнения</h4>
+        <div class="ai-compact-row"><span class="ai-compact-row__label">Провайдер</span><span class="ai-compact-row__value">{{ selected_session.provider_key or '—' }}</span></div>
+        <div class="ai-compact-row"><span class="ai-compact-row__label">Модель</span><span class="ai-compact-row__value">{{ selected_session.model_name or '—' }}</span></div>
+        <div class="ai-compact-row"><span class="ai-compact-row__label">Длительность</span><span class="ai-compact-row__value">{% if selected_session.duration_ms is not none %}{{ selected_session.duration_ms }} мс{% else %}—{% endif %}</span></div>
+        <div class="ai-compact-row"><span class="ai-compact-row__label">Шагов</span><span class="ai-compact-row__value">{{ selected_session.steps|length }}</span></div>
+        <div class="ai-compact-row"><span class="ai-compact-row__label">Статус</span><span class="ai-compact-row__value">{{ status_badge(selected_session.status) }}</span></div>
+      </div>
+    </div>
+
+    <div class="ai-section-box" style="margin-bottom:12px;">
+      <h4 class="ai-section-box__title">Таймлайн пайплайна</h4>
+      {% if selected_session.steps %}
+      <div class="ai-pipeline">
+        {% for step in selected_session.steps %}
+        <div class="ai-pipeline__step">
+          <div class="ai-pipeline__step-head">
+            <span class="ai-step__time">{{ step.started_at.strftime('%H:%M:%S') if step.started_at else '—' }}</span>
+            {{ status_badge(step.status) }}
+            <span class="ai-step__name">{{ step.stage_name }}</span>
+            <span class="ai-step__dur">{% if step.duration_ms is not none %}{{ step.duration_ms }} мс{% else %}—{% endif %}</span>
+          </div>
+          {% if step.step_metadata %}
+          <div class="ai-pipeline__step-body">
+            <details><summary>JSON payload</summary><pre class="ai-pre">{{ step.step_metadata | tojson(indent=2) }}</pre></details>
+          </div>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="ai-empty">Шаги не записаны (сессия не закрыта или воркер упал до finish).</div>
+      {% endif %}
+    </div>
+
+    {% if selected_session.execution_metadata %}
+    <details class="ai-json-collapse">
+      <summary><span class="ai-tooltip">Метаданные сессии (JSON)<span class="ai-tooltip__text">Полный технический снимок метаданных execution-сессии.</span></span></summary>
+      <pre class="ai-pre">{{ selected_session.execution_metadata | tojson(indent=2) }}</pre>
+    </details>
+    {% endif %}
+  </section>
   {% else %}
-    <div class="ai-empty">Трейсов нет. Отправьте отзыв на <a href="/">главной</a> — воркер создаст сессию обработки.</div>
+  <section class="ai-card ai-detail-panel"><div class="ai-empty">Выберите запись для просмотра деталей.</div></section>
   {% endif %}
-</section>
+
+</div>
 {% endblock %}

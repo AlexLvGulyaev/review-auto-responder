@@ -44,7 +44,8 @@ async def list_audit(
     user_id_param: str | None = Query(default=None, alias="user_id"),
     date_from: str | None = Query(default=None),
     date_to: str | None = Query(default=None),
-    limit: int = Query(default=100, ge=1, le=500),
+    selected: int | None = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     db: AsyncSession = Depends(get_db_session),
     identity=Depends(admin_auth),
@@ -72,6 +73,13 @@ async def list_audit(
     result = await db.execute(stmt)
     entries = result.scalars().unique().all()
 
+    # Master-detail: выбранная запись для правой панели. Если selected не задан —
+    # дефолтно первая запись текущей страницы (правая панель не пуста на входе).
+    selected_id = selected
+    if selected_id is None and entries:
+        selected_id = entries[0].id
+    selected_entry = await db.get(AuditLog, selected_id) if selected_id is not None else None
+
     return templates.TemplateResponse(
         "audit.html",
         {
@@ -82,6 +90,8 @@ async def list_audit(
             "total": total,
             "limit": limit,
             "offset": offset,
+            "selected_id": selected_id,
+            "selected_entry": selected_entry,
             "filters": {
                 "action": action,
                 "resource_type": resource_type,

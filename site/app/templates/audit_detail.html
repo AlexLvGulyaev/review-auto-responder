@@ -5,31 +5,56 @@
 {% block page_subtitle %}<a href="/admin/audit">← к журналу аудита</a>{% endblock %}
 
 {% block content %}
-<section class="ai-card">
-  <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
-    <h2 class="ai-card__title" style="margin:0;">Запись #{{ entry.id }}</h2>
-    {% if entry.action in ('admin.rbac_denied', 'admin.login_failed', 'auth.worker_denied') %}
-      <span class="ai-chip error">{{ entry.action }}</span>
-    {% elif entry.action in ('admin.login_success', 'admin.config_update') %}
-      <span class="ai-chip ok">{{ entry.action }}</span>
-    {% else %}
-      <span class="ai-chip skipped">{{ entry.action }}</span>
-    {% endif %}
+
+{# action-бейдж (дублируем макрос из list-страницы — макросы не наследуются). #}
+{% macro action_badge(action_val) -%}
+{% set error_actions = ['admin.rbac_denied', 'admin.login_failed', 'auth.worker_denied'] %}
+{% set ok_actions = ['admin.login_success', 'admin.config_update', 'admin.provider_test'] %}
+<span class="ai-status {% if action_val in error_actions %}ai-status--error{% elif action_val in ok_actions %}ai-status--ok{% else %}ai-status--muted{% endif %}">{{ action_val }}</span>
+{%- endmacro %}
+
+<section class="ai-card ai-detail-panel">
+  <div class="ai-detail-head">
+    <h2 class="ai-section__title">ДЕТАЛИЗАЦИЯ СОБЫТИЯ</h2>
+    {{ action_badge(entry.action) }}
   </div>
 
-  <div class="ai-grid ai-grid--2">
-    <div class="ai-metric"><div class="ai-metric__label">Действие</div><div class="ai-metric__value" style="font-size:0.9rem;">{{ entry.action }}</div></div>
-    <div class="ai-metric"><div class="ai-metric__label">Ресурс</div><div class="ai-metric__value" style="font-size:0.9rem;">{{ entry.resource_type }}{% if entry.resource_id %} / {{ entry.resource_id }}{% endif %}</div></div>
-    <div class="ai-metric"><div class="ai-metric__label">Пользователь</div><div class="ai-metric__value" style="font-size:0.9rem;">{{ entry.user_name or '—' }}{% if entry.user_id %} <span class="muted">(id: {{ entry.user_id }})</span>{% endif %}</div></div>
-    <div class="ai-metric"><div class="ai-metric__label">Роль</div><div class="ai-metric__value" style="font-size:0.9rem;">{{ entry.user_role or '—' }}</div></div>
-    <div class="ai-metric"><div class="ai-metric__label">IP-адрес</div><div class="ai-metric__value" style="font-size:0.9rem;">{{ entry.ip_address or '—' }}</div></div>
-    <div class="ai-metric"><div class="ai-metric__label">Время</div><div class="ai-metric__value" style="font-size:0.8rem;color:var(--ai-text-muted);">{{ entry.created_at.strftime('%Y-%m-%d %H:%M:%S') if entry.created_at else '—' }}</div></div>
+  <div class="ai-grid ai-grid--2" style="margin-bottom:12px;">
+    <div class="ai-section-box">
+      <h4 class="ai-section-box__title">Параметры акции</h4>
+      <div class="ai-compact-row"><span class="ai-compact-row__label">ID</span><span class="ai-compact-row__value ai-compact-row__value--mono">#{{ entry.id }}</span></div>
+      <div class="ai-compact-row"><span class="ai-compact-row__label">Действие</span><span class="ai-compact-row__value">{{ entry.action }}</span></div>
+      <div class="ai-compact-row"><span class="ai-compact-row__label">Ресурс</span><span class="ai-compact-row__value">{{ entry.resource_type or '—' }}{% if entry.resource_id %} / {{ entry.resource_id }}{% endif %}</span></div>
+    </div>
+    <div class="ai-section-box">
+      <h4 class="ai-section-box__title">Параметры пользователя</h4>
+      <div class="ai-compact-row"><span class="ai-compact-row__label">Пользователь</span><span class="ai-compact-row__value">{{ entry.user_name or entry.user_id or '—' }}</span></div>
+      <div class="ai-compact-row"><span class="ai-compact-row__label">Роль</span><span class="ai-compact-row__value">{{ entry.user_role or '—' }}</span></div>
+      <div class="ai-compact-row"><span class="ai-compact-row__label">IP-адрес</span><span class="ai-compact-row__value ai-compact-row__value--mono">{{ entry.ip_address or '—' }}</span></div>
+      <div class="ai-compact-row"><span class="ai-compact-row__label">Время</span><span class="ai-compact-row__value">{{ entry.created_at.strftime('%Y-%m-%d %H:%M:%S') if entry.created_at else '—' }}</span></div>
+    </div>
   </div>
 
-  <hr class="ai-divider">
-  <div class="ai-field">
-    <label>Детали</label>
-    <pre class="ai-pre">{{ entry.details | tojson }}</pre>
+  <div class="ai-section-box" style="margin-bottom:12px;">
+    <h4 class="ai-section-box__title">Детали / metadata</h4>
+    <pre class="ai-pre">{{ entry.details | tojson(indent=2) }}</pre>
   </div>
+
+  {% set snap = {
+    "id": entry.id,
+    "action": entry.action,
+    "resource_type": entry.resource_type,
+    "resource_id": entry.resource_id,
+    "user_id": entry.user_id,
+    "user_name": entry.user_name,
+    "user_role": entry.user_role,
+    "ip_address": entry.ip_address,
+    "created_at": entry.created_at.isoformat() if entry.created_at else None,
+    "details": entry.details,
+  } %}
+  <details class="ai-json-collapse">
+    <summary><span class="ai-tooltip">Технический снимок события (JSON)<span class="ai-tooltip__text">Полный JSON записи аудита — все поля, включая details.</span></span></summary>
+    <pre class="ai-pre">{{ snap | tojson(indent=2) }}</pre>
+  </details>
 </section>
 {% endblock %}
