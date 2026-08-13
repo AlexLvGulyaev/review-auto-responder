@@ -7,7 +7,6 @@
 {% block page_actions %}
   <button type="submit" form="cfgForm" class="ai-btn" {{ 'disabled' if is_demo }} title="{{ 'Демо-режим: только просмотр' if is_demo else 'Сохранить config.json + промпт' }}">Сохранить</button>
   <a class="ai-btn ai-btn--secondary ai-btn--small" href="/admin">↻ Обновить</a>
-  <a class="ai-btn ai-btn--secondary ai-btn--small" href="/admin/status" target="_blank">JSON-статус</a>
 {% endblock %}
 
 {% block content %}
@@ -46,14 +45,14 @@
   {# Ряд 1 — 5 компонентов #}
   <div class="ai-grid ai-grid--5" style="margin-bottom:12px;">
     <div class="ai-metric">
-      <div class="ai-metric__label">PostgreSQL</div>
+      <div class="ai-metric__label"><span class="ai-tooltip">PostgreSQL<span class="ai-tooltip__text">БД сайта (PostgreSQL 16): отзывы, execution-трейсы, аудит. Проба SELECT 1 + latency. error — сайт и воркер неработоспособны.</span></span></div>
       <div class="ai-metric__value">
         {% if db.status == 'ok' %}<span class="ai-status ai-status--ok">ok</span>{% else %}<span class="ai-status ai-status--error">error</span>{% endif %}
       </div>
       <div class="ai-metric__note">{{ db.latency_ms }} мс{% if db.detail %} · {{ db.detail }}{% endif %}</div>
     </div>
     <div class="ai-metric">
-      <div class="ai-metric__label">Воркер</div>
+      <div class="ai-metric__label"><span class="ai-tooltip">Воркер<span class="ai-tooltip__text">Обработчик (review-worker): опрашивает сайт каждые WORKER_POLL_INTERVAL сек, определяет тон, генерирует ответ. Liveness по heartbeat; «не отвечает» — завис или упал.</span></span></div>
       <div class="ai-metric__value">
         {% if not w.available %}
           <span class="ai-status ai-status--muted">нет данных</span>
@@ -66,7 +65,7 @@
       <div class="ai-metric__note">{% if w.available %}обновлён {{ w.age_seconds }}с назад{% else %}status.json отсутствует{% endif %}</div>
     </div>
     <div class="ai-metric">
-      <div class="ai-metric__label">LLM-провайдер</div>
+      <div class="ai-metric__label"><span class="ai-tooltip">LLM-провайдер<span class="ai-tooltip__text">Активный LLM-провайдер (из config.json). «готов» — ключ задан и включён; «нет ключа» — сработает fallback LLM, затем словарные шаблоны.</span></span></div>
       <div class="ai-metric__value">
         {% if not w.available %}
           <span class="ai-status ai-status--muted">нет данных</span>
@@ -81,7 +80,7 @@
       <div class="ai-metric__note">активный · применяется в runtime</div>
     </div>
     <div class="ai-metric">
-      <div class="ai-metric__label">Telegram-бот</div>
+      <div class="ai-metric__label"><span class="ai-tooltip">Telegram-бот<span class="ai-tooltip__text">Уведомления оператору о новых отзывах. «настроен» — заданы TELEGRAM_BOT_TOKEN + TELEGRAM_USER_CHAT_ID; без них — пропуск, на обработку отзывов не влияет.</span></span></div>
       <div class="ai-metric__value">
         {% if w.available and w.telegram %}
           <span class="ai-status ai-status--ok">настроен</span>
@@ -94,7 +93,7 @@
       <div class="ai-metric__note">уведомления оператору</div>
     </div>
     <div class="ai-metric">
-      <div class="ai-metric__label">API (сайт)</div>
+      <div class="ai-metric__label"><span class="ai-tooltip">API (сайт)<span class="ai-tooltip__text">HTTP API сайта (FastAPI): /health, /api/reviews, /admin. Проба /health. Принимает отзывы и хранит статусы обработки.</span></span></div>
       <div class="ai-metric__value"><span class="ai-status ai-status--ok">ok</span></div>
       <div class="ai-metric__note">/health · /admin отвечают</div>
     </div>
@@ -102,17 +101,17 @@
 
   {# Ряд 2 — 5 метрик #}
   <div class="ai-grid ai-grid--5" style="margin-bottom:12px;">
-    <div class="ai-metric"><div class="ai-metric__label">Отзывы new</div><div class="ai-metric__value">{{ status.db_metrics.reviews.new }}</div></div>
-    <div class="ai-metric"><div class="ai-metric__label">Отзывы processed</div><div class="ai-metric__value">{{ status.db_metrics.reviews.processed }}</div></div>
-    <div class="ai-metric"><div class="ai-metric__label">Трейсы ok</div><div class="ai-metric__value">{{ status.db_metrics.executions.ok }}</div></div>
-    <div class="ai-metric"><div class="ai-metric__label">Трейсы error</div><div class="ai-metric__value">{{ status.db_metrics.executions.error }}</div></div>
-    <div class="ai-metric"><div class="ai-metric__label">Аудит-записи</div><div class="ai-metric__value">{{ status.db_metrics.audit_count }}</div></div>
+    <div class="ai-metric"><div class="ai-metric__label"><span class="ai-tooltip">Отзывы new<span class="ai-tooltip__text">Отзывы со status=new — ждут обработки воркером. Если число растёт и не падает — воркер не справляется или упал.</span></span></div><div class="ai-metric__value">{{ status.db_metrics.reviews.new }}</div></div>
+    <div class="ai-metric"><div class="ai-metric__label"><span class="ai-tooltip">Отзывы processed<span class="ai-tooltip__text">Отзывы со status=processed — воркер уже сгенерировал ответ и перевёл статус. Растёт по мере работы.</span></span></div><div class="ai-metric__value">{{ status.db_metrics.reviews.processed }}</div></div>
+    <div class="ai-metric"><div class="ai-metric__label"><span class="ai-tooltip">Трейсы ok<span class="ai-tooltip__text">Execution-сессии, завершённые успешно (status=ok). Каждая = один обработанный отзыв. См. /admin/executions.</span></span></div><div class="ai-metric__value">{{ status.db_metrics.executions.ok }}</div></div>
+    <div class="ai-metric"><div class="ai-metric__label"><span class="ai-tooltip">Трейсы error<span class="ai-tooltip__text">Execution-сессии, завершённые с ошибкой (status=error). Рост = сбои в пайплайне (LLM, запись и т.д.). Детали — в «Последние ошибки» и /admin/executions.</span></span></div><div class="ai-metric__value">{{ status.db_metrics.executions.error }}</div></div>
+    <div class="ai-metric"><div class="ai-metric__label"><span class="ai-tooltip">Аудит-записи<span class="ai-tooltip__text">Записи в audit_logs: входы в /admin, смена конфига, RBAC-отказы, отказы X-Worker-Token, тесты провайдеров. См. /admin/audit.</span></span></div><div class="ai-metric__value">{{ status.db_metrics.audit_count }}</div></div>
   </div>
 
   {# Последние ошибки (health-сигнал) #}
   {% if status.db_metrics.recent_errors %}
   <div>
-    <div class="ai-metric__label" style="margin-bottom:6px;">Последние ошибки трейсов</div>
+    <div class="ai-metric__label" style="margin-bottom:6px;"><span class="ai-tooltip">Последние ошибки трейсов<span class="ai-tooltip__text">Последние execution-сессии со status=error — где именно в пайплайне произошёл сбой. Клик по ID — карточка сессии с шагами.</span></span></div>
     <table class="ai-table">
       <thead><tr><th>ID</th><th>Отзыв</th><th>Ошибка</th></tr></thead>
       <tbody>
@@ -136,12 +135,12 @@
 <form id="cfgForm" method="post" action="/admin">
   <div class="ai-config-top">
 
-    {# Панель 1 — Настройки ЛЛМ и провайдера #}
+    {# Панель 1 — Настройки LLM и провайдера #}
     <section class="ai-card">
       <div class="ai-section__head">
         <div>
           <div class="ai-section__title">
-            <span class="ai-tooltip">Настройки ЛЛМ и провайдера<span class="ai-tooltip__text">Секреты (ключи API) — только в .env обработчика, здесь их нет. Это runtime-параметры: смена применяется на следующем цикле опроса без рестарта (hot-reload по mtime config.json).</span></span>
+            <span class="ai-tooltip">Настройки LLM и провайдера<span class="ai-tooltip__text">Секреты (ключи API) — только в .env обработчика, здесь их нет. Это runtime-параметры: смена применяется на следующем цикле опроса без рестарта (hot-reload по mtime config.json).</span></span>
           </div>
           <div class="ai-section__subtitle">Активный и резервный провайдер, модели и параметры генерации.</div>
         </div>
@@ -276,5 +275,13 @@
 <form id="test-gigachat" method="post" action="/admin/test-provider" style="display:none;">
   <input type="hidden" name="provider_key" value="gigachat">
 </form>
+
+{# JSON-статус — раскрывающийся блок (не уводит на отдельную страницу) #}
+<details class="ai-json-collapse">
+  <summary>
+    <span class="ai-tooltip">JSON-статус<span class="ai-tooltip__text">Сырой JSON состояния системы — те же данные, что отдаёт GET /admin/status (для программной проверки/дебага). Раскрывается здесь, без ухода на отдельную страницу.</span></span>
+  </summary>
+  <pre class="ai-pre">{{ status_json }}</pre>
+</details>
 
 {% endblock %}

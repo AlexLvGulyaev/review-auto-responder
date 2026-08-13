@@ -248,6 +248,8 @@ async def admin_panel(request: Request, db: AsyncSession = Depends(get_db_sessio
             "provider": request.query_params.get("prov", ""),
             "message": request.query_params.get("msg", ""),
         }
+    # Состояние системы — один источник для ридонли-панели и JSON-коллапса.
+    system_status = await build_system_status(db)
     return templates.TemplateResponse(
         "admin.html",
         {
@@ -257,7 +259,8 @@ async def admin_panel(request: Request, db: AsyncSession = Depends(get_db_sessio
             "config": config,
             "prompt_text": read_prompt_text(),
             "prompt_info": prompt_info(),
-            "status": await build_system_status(db),
+            "status": system_status,
+            "status_json": json.dumps(system_status, ensure_ascii=False, indent=2, default=str),
             "saved": request.query_params.get("saved") == "1",
             "test_result": test_result,
         },

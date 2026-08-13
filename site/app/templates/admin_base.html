@@ -154,12 +154,14 @@
 
     .ai-field-label { font-size: 0.6875rem; color: var(--ai-text-muted); font-weight: 600; }
 
-    /* CSS-only tooltip (наведение мышью) — заменяет inline-описательные тексты. */
+    /* CSS-only tooltip (наведение мышью) — заменяет inline-описательные тексты.
+       Левая привязка (left:0), не центрирование: тултип тянется вправо от понятия
+       и не залезает за левый сайдбар (контент обрезается по overflow-x). z-index
+       выше сайдбара. Для узких колонок состояния (ai-metric) — узкий вариант снизу. */
     .ai-tooltip { position: relative; cursor: help; border-bottom: 1px dotted var(--ai-text-muted); }
     .ai-tooltip__text {
       visibility: hidden; opacity: 0; transition: opacity 0.15s;
-      position: absolute; z-index: 50; left: 50%; bottom: 125%;
-      transform: translateX(-50%);
+      position: absolute; z-index: 1000; left: 0; bottom: 125%;
       width: 260px; padding: 8px 10px;
       background-color: var(--ai-surface-elevated); color: var(--ai-text-secondary);
       border: 1px solid var(--ai-border); border-radius: 8px;
@@ -167,6 +169,18 @@
       box-shadow: var(--ai-shadow); pointer-events: none;
     }
     .ai-tooltip:hover .ai-tooltip__text, .ai-tooltip:focus .ai-tooltip__text { visibility: visible; opacity: 1; }
+    /* В узких колонках состояния (5 в ряд) — тултип снизу и у́же колонки, чтобы
+       не обрезался ни за сайдбаром, ни за правым краём. */
+    .ai-metric .ai-tooltip__text { left: 0; bottom: auto; top: 100%; width: 190px; }
+
+    /* Коллапс JSON-статуса (раскрывается на странице, без ухода на отдельный эндпоинт). */
+    .ai-json-collapse { background-color: var(--ai-surface); border: 1px solid var(--ai-border); border-radius: var(--ai-radius); margin-bottom: 14px; }
+    .ai-json-collapse > summary { padding: 12px 16px; cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; font-family: var(--ai-font-display); font-size: 0.875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ai-text); }
+    .ai-json-collapse > summary::-webkit-details-marker { display: none; }
+    .ai-json-collapse > summary::before { content: "▸"; color: var(--ai-text-muted); font-size: 0.75rem; }
+    .ai-json-collapse[open] > summary::before { content: "▾"; }
+    .ai-json-collapse[open] > summary { border-bottom: 1px solid var(--ai-border); }
+    .ai-json-collapse .ai-pre { margin: 0; max-height: 420px; overflow: auto; border: none; box-shadow: none; background: transparent; }
 
     .ai-content { flex: 1; padding: 16px 20px 20px; overflow-y: auto; min-width: 0; }
 
@@ -298,7 +312,7 @@
     .ai-card__head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; }
     .ai-card__head h2 { margin: 0; }
 
-    /* Двухпанельный лэйаут конфиг-консоли: «Настройки ЛЛМ» | «Системный промпт». */
+    /* Двухпанельный лэйаут конфиг-консоли: «Настройки LLM» | «Системный промпт». */
     .ai-config-top { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: stretch; }
     .ai-config-top > .ai-card { margin-bottom: 0; display: flex; flex-direction: column; }
 
