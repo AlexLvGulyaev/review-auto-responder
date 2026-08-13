@@ -29,43 +29,55 @@
     }
 
     .container {
-      width: min(960px, calc(100% - 32px));
+      width: min(1600px, calc(100% - 32px));
       margin: 0 auto;
-      padding: 32px 0 48px;
+      padding: 16px 0 32px;
     }
 
     .hero, .panel {
       background: var(--card);
       border: 1px solid var(--border);
-      border-radius: 18px;
-      box-shadow: 0 12px 35px rgba(15, 23, 42, 0.06);
+      border-radius: 16px;
+      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
     }
 
     .hero {
-      padding: 28px;
-      margin-bottom: 20px;
+      padding: 14px 24px;
+      margin-bottom: 14px;
     }
 
     h1 {
-      margin: 0 0 8px;
-      font-size: clamp(28px, 4vw, 38px);
+      margin: 0 0 2px;
+      font-size: clamp(20px, 2.6vw, 28px);
     }
 
     .subtitle {
       margin: 0;
       color: var(--muted);
-      line-height: 1.5;
+      font-size: 13px;
+      line-height: 1.4;
     }
 
     .layout {
       display: grid;
-      grid-template-columns: minmax(280px, 360px) 1fr;
-      gap: 20px;
+      grid-template-columns: 340px 1fr;
+      gap: 18px;
       align-items: start;
     }
 
     .panel {
       padding: 22px;
+    }
+
+    .layout > .panel:first-child {
+      position: sticky;
+      top: 16px;
+      align-self: start;
+    }
+
+    .layout > .panel:last-child {
+      max-height: calc(100vh - 140px);
+      overflow-y: auto;
     }
 
     form {
@@ -197,40 +209,41 @@
 
     .review-children {
       display: grid;
-      gap: 12px;
-      margin-top: 14px;
-      padding-left: 18px;
+      gap: 8px;
+      margin-top: 6px;
+      padding-left: 16px;
       border-left: 2px solid rgba(31, 111, 235, 0.12);
     }
 
     .reply-form {
-      display: grid;
-      gap: 10px;
-      margin-top: 14px;
-      padding-top: 14px;
+      margin-top: 10px;
+      padding-top: 10px;
       border-top: 1px solid var(--border);
     }
 
     .reply-grid {
       display: grid;
-      grid-template-columns: minmax(0, 180px) 1fr auto;
+      grid-template-columns: minmax(0, 220px) minmax(120px, 420px) auto;
       gap: 10px;
-      align-items: start;
-    }
-
-    .reply-grid textarea {
-      min-height: 84px;
+      align-items: center;
+      justify-content: start;
     }
 
     .reply-form button {
-      align-self: stretch;
-      min-width: 120px;
+      align-self: center;
+      min-width: auto;
+      padding: 9px 16px;
     }
 
     .reply-message {
-      min-height: 18px;
       font-size: 13px;
       color: var(--muted);
+      margin-top: 6px;
+      min-height: 0;
+    }
+
+    .reply-message:empty {
+      margin-top: 0;
     }
 
     .reply-message.error { color: var(--error); }
@@ -247,6 +260,15 @@
     @media (max-width: 820px) {
       .layout {
         grid-template-columns: 1fr;
+      }
+
+      .layout > .panel:first-child {
+        position: static;
+      }
+
+      .layout > .panel:last-child {
+        max-height: none;
+        overflow: visible;
       }
 
       .container {
@@ -356,7 +378,7 @@
           <form class="reply-form" data-parent-id="${review.id}">
             <div class="reply-grid">
               <input type="text" name="name" maxlength="255" placeholder="Ваше имя">
-              <textarea name="text" required maxlength="5000" placeholder="Напишите комментарий к этому комментарию"></textarea>
+              <input type="text" name="text" required maxlength="5000" placeholder="Комментарий">
               <button type="submit">Ответить</button>
             </div>
             <div class="reply-message" aria-live="polite"></div>
@@ -376,7 +398,22 @@
       reviewsContainer.innerHTML = reviewTree.map(renderReview).join("");
     }
 
-    async function loadReviews() {
+    function replyFormDirtyOrFocused() {
+      const active = document.activeElement;
+      if (active && active.closest && active.closest(".reply-form")) {
+        return true;
+      }
+      for (const form of reviewsContainer.querySelectorAll(".reply-form")) {
+        const name = form.querySelector('input[name="name"]');
+        const text = form.querySelector('input[name="text"]');
+        if ((name && name.value.trim()) || (text && text.value.trim())) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    async function loadReviews({ force = false } = {}) {
       try {
         const response = await fetch("/api/reviews");
         if (!response.ok) {
@@ -384,6 +421,11 @@
         }
 
         const reviews = await response.json();
+        // Не затираем формы ответа, пока пользователь печатает или ввёл значение —
+        // иначе авто-рефреш каждые 5с сбрасывает введённый текст.
+        if (!force && replyFormDirtyOrFocused()) {
+          return;
+        }
         renderReviews(reviews);
       } catch (error) {
         reviewsContainer.innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`;
@@ -401,7 +443,7 @@
       const message = replyForm.querySelector(".reply-message");
       const submitButton = replyForm.querySelector('button[type="submit"]');
       const nameInput = replyForm.querySelector('input[name="name"]');
-      const textInput = replyForm.querySelector('textarea[name="text"]');
+      const textInput = replyForm.querySelector('input[name="text"]');
       const parentId = Number(replyForm.dataset.parentId);
 
       message.textContent = "";
@@ -435,7 +477,7 @@
         replyForm.reset();
         message.textContent = "Комментарий добавлен.";
         message.classList.add("success");
-        await loadReviews();
+        await loadReviews({ force: true });
       } catch (error) {
         message.textContent = error.message;
         message.classList.add("error");
@@ -478,7 +520,7 @@
         reviewForm.reset();
         formMessage.textContent = "Отзыв сохранен.";
         formMessage.classList.add("success");
-        await loadReviews();
+        await loadReviews({ force: true });
       } catch (error) {
         formMessage.textContent = error.message;
         formMessage.classList.add("error");
