@@ -30,12 +30,41 @@
 {% if name == 'detect_tone' %}Классификация тона{% elif name == 'telegram' %}Уведомление Telegram{% elif name == 'llm_call' %}Генерация LLM{% elif name == 'persist_reply' %}Сохранение ответа{% elif name == 'mark_processed' %}Отметка обработано{% else %}{{ name }}{% endif %}
 {%- endmacro %}
 
-{# Макрос правой панели деталей для ОДНОЙ сессии (используется и в pre-render, и в detail-странице). #}
+{# Тон простым текстом (без цвета) — для третьей строки карточки списка. #}
+{% macro tone_label(tone_val) -%}
+{% if tone_val == 'positive' %}положительный{% elif tone_val == 'negative' %}отрицательный{% elif tone_val == 'neutral' %}нейтральный{% else %}—{% endif %}
+{%- endmacro %}
+
+{# Макрос правой панели деталей для ОДНОЙ сессии (используется и в pre-render, и в detail-странице).
+   Порядок секций — по эталону операционной консоли: шапка → Параметры запроса/исполнения
+   (side-by-side, вверху) → Цепочка этапов → Запрос/Ответ (side-by-side) → Таймлайн → JSON-снимок. #}
 {% macro detail_panel(s, review, reply) -%}
   {% set tone = review.tone if review else None %}
+  {% set llm_step = s.steps | selectattr('stage_name','equalto','llm_call') | first %}
+  {% set tokens = llm_step.step_metadata.get('tokens') if llm_step and llm_step.step_metadata else None %}
+
   <div class="ai-detail-head">
     <h2 class="ai-section__title">ДЕТАЛИЗАЦИЯ ЗАПРОСА</h2>
-    <div>{{ status_badge(s.status) }}{{ tone_badge(tone) }}</div>
+    <div>{{ status_badge(s.status) }}</div>
+  </div>
+
+  <div class="ai-grid ai-grid--2" style="margin-bottom:12px;">
+    <div class="ai-section-box">
+      <h4 class="ai-section-box__title">Параметры запроса</h4>
+      <div class="ai-compact-row"><span class="ai-compact-row__label">Код отзыва</span><span class="ai-compact-row__value">{% if review %}#{{ review.id }}{% elif s.review_id %}#{{ s.review_id }}{% else %}—{% endif %}</span></div>
+      <div class="ai-compact-row"><span class="ai-compact-row__label">Имя пользователя</span><span class="ai-compact-row__value">{{ review.name if review and review.name else '—' }}</span></div>
+      <div class="ai-compact-row"><span class="ai-compact-row__label">Тон</span><span class="ai-compact-row__value">{{ tone_badge(tone) }}</span></div>
+      <div class="ai-compact-row"><span class="ai-compact-row__label">Маршрут</span><span class="ai-compact-row__value">{{ s.route or '—' }}</span></div>
+      <div class="ai-compact-row"><span class="ai-compact-row__label">Время создания</span><span class="ai-compact-row__value">{{ review.created_at.strftime('%Y-%m-%d %H:%M:%S') if review and review.created_at else '—' }}</span></div>
+    </div>
+    <div class="ai-section-box">
+      <h4 class="ai-section-box__title">Параметры исполнения</h4>
+      <div class="ai-compact-row"><span class="ai-compact-row__label">Провайдер</span><span class="ai-compact-row__value">{{ s.provider_key or '—' }}</span></div>
+      <div class="ai-compact-row"><span class="ai-compact-row__label">Модель</span><span class="ai-compact-row__value">{{ s.model_name or '—' }}</span></div>
+      <div class="ai-compact-row"><span class="ai-compact-row__label">Длительность</span><span class="ai-compact-row__value">{% if s.duration_ms is not none %}{{ s.duration_ms }} мс{% else %}—{% endif %}</span></div>
+      <div class="ai-compact-row"><span class="ai-compact-row__label">Токены</span><span class="ai-compact-row__value">{% if tokens is not none %}{{ tokens }}{% else %}—{% endif %}</span></div>
+      <div class="ai-compact-row"><span class="ai-compact-row__label">Время завершения</span><span class="ai-compact-row__value">{{ s.finished_at.strftime('%Y-%m-%d %H:%M:%S') if s.finished_at else '—' }}</span></div>
+    </div>
   </div>
 
   <div class="ai-section-box" style="margin-bottom:12px;">
@@ -55,23 +84,17 @@
   </div>
 
   <div class="ai-section-box" style="margin-bottom:12px;">
-    <h4 class="ai-section-box__title">Параметры исполнения</h4>
-    <div class="ai-compact-row"><span class="ai-compact-row__label">Отзыв</span><span class="ai-compact-row__value">{% if s.review_id %}#{{ s.review_id }}{% else %}—{% endif %}</span></div>
-    <div class="ai-compact-row"><span class="ai-compact-row__label">Провайдер</span><span class="ai-compact-row__value">{{ s.provider_key or '—' }}</span></div>
-    <div class="ai-compact-row"><span class="ai-compact-row__label">Модель</span><span class="ai-compact-row__value">{{ s.model_name or '—' }}</span></div>
-    <div class="ai-compact-row"><span class="ai-compact-row__label">Длительность</span><span class="ai-compact-row__value">{% if s.duration_ms is not none %}{{ s.duration_ms }} мс{% else %}—{% endif %}</span></div>
-    <div class="ai-compact-row"><span class="ai-compact-row__label">Начало</span><span class="ai-compact-row__value">{{ s.started_at.strftime('%Y-%m-%d %H:%M:%S') if s.started_at else '—' }}</span></div>
-    <div class="ai-compact-row"><span class="ai-compact-row__label">Финал</span><span class="ai-compact-row__value">{{ s.finished_at.strftime('%Y-%m-%d %H:%M:%S') if s.finished_at else '—' }}</span></div>
-  </div>
-
-  <div class="ai-section-box" style="margin-bottom:12px;">
     <h4 class="ai-section-box__title">Таймлайн пайплайна</h4>
     {% if s.steps %}
     <div class="ai-pipeline">
+      {# Поэтапное датавремя: started_at сессии + накопленная длительность предыдущих шагов
+         (воркер не пишет step.started_at — только duration_ms, поэтому время реконструируется). #}
+      {% set ns = namespace(off=0) %}
       {% for step in s.steps %}
+      {% set step_ts = s.started_at + timedelta(milliseconds=ns.off) if s.started_at else None %}
       <div class="ai-pipeline__step">
         <div class="ai-pipeline__step-head">
-          <span class="ai-step__time">{{ step.started_at.strftime('%H:%M:%S') if step.started_at else '—' }}</span>
+          <span class="ai-step__time">{{ step_ts.strftime('%Y-%m-%d %H:%M:%S') if step_ts else '—' }}</span>
           {{ status_badge(step.status) }}
           <span class="ai-step__name">{{ stage_label(step.stage_name) }}</span>
           <span class="ai-step__dur">{% if step.duration_ms is not none %}{{ step.duration_ms }} мс{% else %}—{% endif %}</span>
@@ -82,6 +105,7 @@
         </div>
         {% endif %}
       </div>
+      {% set ns.off = ns.off + (step.duration_ms or 0) %}
       {% endfor %}
     </div>
     {% else %}
@@ -159,8 +183,11 @@
         </div>
         <div class="ai-log-card__title">{{ rv.text if rv and rv.text else 'Сессия #' ~ s.id }}</div>
         <div class="ai-log-card__meta">
-          {{ tone_badge(rv.tone if rv else None) }}
           <span>#{{ s.id }}</span>
+          <span>·</span>
+          <span>{{ tone_label(rv.tone if rv else None) }}</span>
+          <span>·</span>
+          <span>{{ s.route or '—' }}</span>
           {% if s.duration_ms is not none %}<span>·</span><span>{{ s.duration_ms }} мс</span>{% endif %}
         </div>
       </a>

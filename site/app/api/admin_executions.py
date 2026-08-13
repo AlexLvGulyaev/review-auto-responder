@@ -103,6 +103,7 @@ async def list_executions(
             "selected_id": selected_id,
             "reviews_map": reviews_map,
             "replies_map": replies_map,
+            "timedelta": timedelta,
             "filters": {
                 "review_id": review_id,
                 "status": status_filter,
@@ -141,5 +142,6 @@ async def execution_detail(
             "session": session,
             "review": review,
             "reply": reply,
+            "timedelta": timedelta,
         },
     )

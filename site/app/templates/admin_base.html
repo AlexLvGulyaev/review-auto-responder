@@ -311,7 +311,7 @@
 
     /* ── Master-detail (Логи / Аудит) ─────────────────────────────────────── */
     .ai-master-detail { display: flex; gap: 12px; align-items: flex-start; }
-    .ai-list-panel { width: 380px; flex-shrink: 0; position: sticky; top: 84px;
+    .ai-list-panel { width: 420px; flex-shrink: 0; position: sticky; top: 84px;
       max-height: calc(100vh - 100px); display: flex; flex-direction: column; overflow: hidden; }
     .ai-list-panel__filters { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
     .ai-list-panel__filters .ai-input, .ai-list-panel__filters .ai-select { font-size: 0.8rem; padding: 6px 8px; }
@@ -359,7 +359,7 @@
     .ai-pipeline__step-head .ai-step__dur { margin-left: auto; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
       font-size: 0.72rem; color: var(--ai-text); font-variant-numeric: tabular-nums; }
     .ai-pipeline__step-body { padding: 0 10px 8px; }
-    .ai-pipeline__step-body details > summary { cursor: pointer; font-size: 0.7rem; color: var(--ai-primary); }
+    .ai-pipeline__step-body details > summary { cursor: pointer; font-size: 0.7rem; color: var(--ai-text-secondary); }
     .ai-pipeline__step-body .ai-pre { margin-top: 6px; max-height: 160px; font-size: 0.7rem; }
 
     /* ── Логи: бизнес-фильтры + Цепочка этапов + Запрос/Ответ ──────────────── */
@@ -367,12 +367,11 @@
     .ai-filter-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 8px; }
     .ai-filter-row .ai-select { font-size: 0.78rem; padding: 6px 8px; width: 100%; }
     .ai-search { width: 100%; margin-bottom: 10px; font-size: 0.82rem; padding: 7px 10px; }
-    .ai-log-card__title { /* line-clamp-2: бизнес-текст отзыва в две строки */
-      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-      overflow: hidden; text-overflow: ellipsis; white-space: normal; line-height: 1.35; }
+    .ai-log-card__title { /* одна строка с обрезкой — тонкий описатель айтема */
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.35; }
     .ai-chain { font-size: 0.78rem; color: var(--ai-text-secondary); line-height: 1.5;
       word-break: break-word; margin: 0; }
-    .ai-biz-text { max-height: 180px; overflow: auto; background: rgba(0,0,0,0.2);
+    .ai-biz-text { max-height: 120px; overflow: auto; background: rgba(0,0,0,0.2);
       border-radius: 6px; padding: 10px; font-size: 0.82rem; line-height: 1.45;
       white-space: pre-wrap; word-break: break-word; color: var(--ai-text); margin: 0; }
     .ai-detail-head .ai-status + .ai-status { margin-left: 6px; }

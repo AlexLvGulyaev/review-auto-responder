@@ -20,10 +20,32 @@
 {%- endmacro %}
 
 {% set tone = review.tone if review else None %}
+{% set llm_step = session.steps | selectattr('stage_name','equalto','llm_call') | first %}
+{% set tokens = llm_step.step_metadata.get('tokens') if llm_step and llm_step.step_metadata else None %}
+
 <section class="ai-card ai-detail-panel">
   <div class="ai-detail-head">
     <h2 class="ai-section__title">ДЕТАЛИЗАЦИЯ ЗАПРОСА</h2>
-    <div>{{ status_badge(session.status) }}{{ tone_badge(tone) }}</div>
+    <div>{{ status_badge(session.status) }}</div>
+  </div>
+
+  <div class="ai-grid ai-grid--2" style="margin-bottom:12px;">
+    <div class="ai-section-box">
+      <h4 class="ai-section-box__title">Параметры запроса</h4>
+      <div class="ai-compact-row"><span class="ai-compact-row__label">Код отзыва</span><span class="ai-compact-row__value">{% if review %}#{{ review.id }}{% elif session.review_id %}#{{ session.review_id }}{% else %}—{% endif %}</span></div>
+      <div class="ai-compact-row"><span class="ai-compact-row__label">Имя пользователя</span><span class="ai-compact-row__value">{{ review.name if review and review.name else '—' }}</span></div>
+      <div class="ai-compact-row"><span class="ai-compact-row__label">Тон</span><span class="ai-compact-row__value">{{ tone_badge(tone) }}</span></div>
+      <div class="ai-compact-row"><span class="ai-compact-row__label">Маршрут</span><span class="ai-compact-row__value">{{ session.route or '—' }}</span></div>
+      <div class="ai-compact-row"><span class="ai-compact-row__label">Время создания</span><span class="ai-compact-row__value">{{ review.created_at.strftime('%Y-%m-%d %H:%M:%S') if review and review.created_at else '—' }}</span></div>
+    </div>
+    <div class="ai-section-box">
+      <h4 class="ai-section-box__title">Параметры исполнения</h4>
+      <div class="ai-compact-row"><span class="ai-compact-row__label">Провайдер</span><span class="ai-compact-row__value">{{ session.provider_key or '—' }}</span></div>
+      <div class="ai-compact-row"><span class="ai-compact-row__label">Модель</span><span class="ai-compact-row__value">{{ session.model_name or '—' }}</span></div>
+      <div class="ai-compact-row"><span class="ai-compact-row__label">Длительность</span><span class="ai-compact-row__value">{% if session.duration_ms is not none %}{{ session.duration_ms }} мс{% else %}—{% endif %}</span></div>
+      <div class="ai-compact-row"><span class="ai-compact-row__label">Токены</span><span class="ai-compact-row__value">{% if tokens is not none %}{{ tokens }}{% else %}—{% endif %}</span></div>
+      <div class="ai-compact-row"><span class="ai-compact-row__label">Время завершения</span><span class="ai-compact-row__value">{{ session.finished_at.strftime('%Y-%m-%d %H:%M:%S') if session.finished_at else '—' }}</span></div>
+    </div>
   </div>
 
   <div class="ai-section-box" style="margin-bottom:12px;">
@@ -43,23 +65,15 @@
   </div>
 
   <div class="ai-section-box" style="margin-bottom:12px;">
-    <h4 class="ai-section-box__title">Параметры исполнения</h4>
-    <div class="ai-compact-row"><span class="ai-compact-row__label">Отзыв</span><span class="ai-compact-row__value">{% if session.review_id %}#{{ session.review_id }}{% else %}—{% endif %}</span></div>
-    <div class="ai-compact-row"><span class="ai-compact-row__label">Провайдер</span><span class="ai-compact-row__value">{{ session.provider_key or '—' }}</span></div>
-    <div class="ai-compact-row"><span class="ai-compact-row__label">Модель</span><span class="ai-compact-row__value">{{ session.model_name or '—' }}</span></div>
-    <div class="ai-compact-row"><span class="ai-compact-row__label">Длительность</span><span class="ai-compact-row__value">{% if session.duration_ms is not none %}{{ session.duration_ms }} мс{% else %}—{% endif %}</span></div>
-    <div class="ai-compact-row"><span class="ai-compact-row__label">Начало</span><span class="ai-compact-row__value">{{ session.started_at.strftime('%Y-%m-%d %H:%M:%S') if session.started_at else '—' }}</span></div>
-    <div class="ai-compact-row"><span class="ai-compact-row__label">Финал</span><span class="ai-compact-row__value">{{ session.finished_at.strftime('%Y-%m-%d %H:%M:%S') if session.finished_at else '—' }}</span></div>
-  </div>
-
-  <div class="ai-section-box" style="margin-bottom:12px;">
     <h4 class="ai-section-box__title">Таймлайн пайплайна</h4>
     {% if session.steps %}
     <div class="ai-pipeline">
+      {% set ns = namespace(off=0) %}
       {% for step in session.steps %}
+      {% set step_ts = session.started_at + timedelta(milliseconds=ns.off) if session.started_at else None %}
       <div class="ai-pipeline__step">
         <div class="ai-pipeline__step-head">
-          <span class="ai-step__time">{{ step.started_at.strftime('%H:%M:%S') if step.started_at else '—' }}</span>
+          <span class="ai-step__time">{{ step_ts.strftime('%Y-%m-%d %H:%M:%S') if step_ts else '—' }}</span>
           {{ status_badge(step.status) }}
           <span class="ai-step__name">{{ stage_label(step.stage_name) }}</span>
           <span class="ai-step__dur">{% if step.duration_ms is not none %}{{ step.duration_ms }} мс{% else %}—{% endif %}</span>
@@ -70,6 +84,7 @@
         </div>
         {% endif %}
       </div>
+      {% set ns.off = ns.off + (step.duration_ms or 0) %}
       {% endfor %}
     </div>
     {% else %}
