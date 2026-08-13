@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Вход · Админка</title>
+  <style>
+    :root { color-scheme: light; --bg:#f3f5f7; --card:#fff; --text:#17202a; --muted:#5c6b7a; --border:#d7dde4; --accent:#1f6feb; --error:#b42318; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family:"Segoe UI",Tahoma,sans-serif; background:var(--bg); color:var(--text); display:flex; align-items:center; justify-content:center; min-height:100vh; }
+    .card { background:var(--card); border:1px solid var(--border); border-radius:18px; padding:32px; width:min(420px, calc(100% - 32px)); box-shadow:0 12px 35px rgba(15,23,42,.06); }
+    h1 { margin:0 0 6px; font-size:22px; }
+    p.hint { margin:0 0 20px; color:var(--muted); font-size:14px; line-height:1.5; }
+    label { display:block; font-size:13px; color:var(--muted); margin-bottom:6px; }
+    input { width:100%; border:1px solid var(--border); border-radius:12px; padding:12px 14px; font:inherit; }
+    input:focus { outline:2px solid rgba(31,111,235,.15); border-color:var(--accent); }
+    button { margin-top:16px; width:100%; border:0; border-radius:12px; padding:12px; background:var(--accent); color:#fff; font:inherit; font-weight:600; cursor:pointer; }
+    button:hover { background:#1558b0; }
+    .error { color:var(--error); font-size:14px; margin-top:12px; }
+    a.back { display:inline-block; margin-top:16px; color:var(--muted); font-size:13px; text-decoration:none; }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <h1>Админка · вход</h1>
+    <p class="hint">Введите токен доступа. <strong>ADMIN_TOKEN</strong> — полный доступ (смена провайдера, модели, промпта). <strong>ADMIN_DEMO_TOKEN</strong> — только просмотр (demo-режим).</p>
+    <form method="post" action="/admin/login">
+      <label for="token">Токен</label>
+      <input id="token" name="token" type="password" placeholder="вставьте токен" autofocus required>
+      <button type="submit">Войти</button>
+      {% if error %}<div class="error">{{ error }}</div>{% endif %}
+    </form>
+    <a class="back" href="/">← к отзывам</a>
+  </main>
+</body>
+</html>

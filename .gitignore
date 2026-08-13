@@ -1,0 +1,32 @@
+# Секреты и локальное окружение
+.env
+.env.*
+!.env.example
+
+# Внутренние артефакты лаборатории (не публикуются)
+attachments/
+task_history/
+docs/SPEC.md
+
+# Локальные данные / state воркера
+site/data/
+worker/data/
+data/
+*.json.state
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+
+# Docker compose override
+docker-compose.override.yml
+
+# IDE
+.idea/
+.vscode/
+*.swp
+.DS_Store

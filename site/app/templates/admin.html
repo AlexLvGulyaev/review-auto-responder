@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Админка · Review Auto Responder</title>
+  <style>
+    :root { color-scheme: light; --bg:#f3f5f7; --card:#fff; --text:#17202a; --muted:#5c6b7a; --border:#d7dde4; --accent:#1f6feb; --accent-hover:#1558b0; --success:#1a7f37; --warn:#9a6700; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family:"Segoe UI",Tahoma,sans-serif; background:var(--bg); color:var(--text); }
+    .container { width:min(820px, calc(100% - 32px)); margin:0 auto; padding:32px 0 48px; }
+    .card { background:var(--card); border:1px solid var(--border); border-radius:18px; padding:28px; box-shadow:0 12px 35px rgba(15,23,42,.06); }
+    header { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; gap:12px; flex-wrap:wrap; }
+    h1 { margin:0; font-size:24px; }
+    .badge { display:inline-flex; align-items:center; gap:6px; border-radius:999px; padding:5px 12px; font-size:13px; font-weight:600; }
+    .badge.demo { color:var(--warn); background:rgba(154,103,0,.12); }
+    .badge.admin { color:var(--success); background:rgba(26,127,55,.12); }
+    .top-actions a { font-size:13px; color:var(--muted); text-decoration:none; margin-left:12px; }
+    form { display:grid; gap:18px; }
+    .field { display:grid; gap:6px; }
+    label { font-size:13px; color:var(--muted); font-weight:600; }
+    .field .desc { font-size:12px; color:var(--muted); }
+    input, select, textarea { width:100%; border:1px solid var(--border); border-radius:12px; padding:11px 14px; font:inherit; background:#fff; color:var(--text); }
+    textarea { min-height:160px; resize:vertical; font-family:inherit; }
+    input:focus, select:focus, textarea:focus { outline:2px solid rgba(31,111,235,.15); border-color:var(--accent); }
+    input:disabled, select:disabled, textarea:disabled { background:#f3f5f7; color:var(--muted); cursor:not-allowed; }
+    .row { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+    .actions { display:flex; gap:12px; align-items:center; margin-top:8px; }
+    button.save { border:0; border-radius:12px; padding:12px 22px; background:var(--accent); color:#fff; font:inherit; font-weight:600; cursor:pointer; }
+    button.save:hover:not(:disabled) { background:var(--accent-hover); }
+    button.save:disabled { opacity:.55; cursor:not-allowed; }
+    .alert { padding:10px 14px; border-radius:12px; font-size:14px; }
+    .alert.ok { color:var(--success); background:rgba(26,127,55,.1); }
+    .alert.demo { color:var(--warn); background:rgba(154,103,0,.1); }
+    .logout { border:1px solid var(--border); border-radius:12px; padding:11px 16px; background:#fff; color:var(--text); font:inherit; cursor:pointer; text-decoration:none; }
+    @media (max-width:640px){ .row{ grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+  <main class="container">
+    <section class="card">
+      <header>
+        <h1>Runtime-конфиг обработчика</h1>
+        <div class="top-actions">
+          {% if is_demo %}
+            <span class="badge demo">👁 Демо-режим: только просмотр</span>
+          {% else %}
+            <span class="badge admin">🛠 Администратор</span>
+          {% endif %}
+          <a href="/">на сайт</a>
+        </div>
+      </header>
+
+      {% if is_demo %}
+        <div class="alert demo">Вы вошли в демо-режим. Просмотр разрешён, изменение конфигурации заблокировано на backend (POST /admin → 403).</div>
+      {% elif saved %}
+        <div class="alert ok">✓ Конфигурация сохранена. Обработчик применит её на следующем цикле опроса без рестарта.</div>
+      {% endif %}
+
+      <form method="post" action="/admin">
+        <div class="row">
+          <div class="field">
+            <label for="provider">Провайдер</label>
+            <select id="provider" name="provider" {{ 'disabled' if is_demo }}>
+              <option value="openai"   {{ 'selected' if config.provider == 'openai' }}>OpenAI</option>
+              <option value="gigachat" {{ 'selected' if config.provider == 'gigachat' }}>GigaChat (Сбер)</option>
+              <option value="yandex"   {{ 'selected' if config.provider == 'yandex' }}>YandexGPT</option>
+              <option value="custom"   {{ 'selected' if config.provider == 'custom' }}>Свой (OpenAI-compatible)</option>
+            </select>
+            <span class="desc">Смена применяется в runtime — без рестарта обработчика. Ключи провайдеров хранятся в <code>.env</code> обработчика, не здесь.</span>
+          </div>
+          <div class="field">
+            <label for="openai_model">Модель</label>
+            <input id="openai_model" name="openai_model" value="{{ config.openai_model }}" {{ 'disabled' if is_demo }}>
+            <span class="desc">Для Yandex: <code>gpt://&lt;folder_id&gt;/yandexgpt/latest</code></span>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="field">
+            <label for="openai_base_url">Base URL (для «Свой» / OpenAI)</label>
+            <input id="openai_base_url" name="openai_base_url" value="{{ config.openai_base_url }}" {{ 'disabled' if is_demo }}>
+            <span class="desc">Для GigaChat/Yandex игнорируется (пресет в коде).</span>
+          </div>
+          <div class="field">
+            <label for="yandex_folder_id">Yandex folder_id</label>
+            <input id="yandex_folder_id" name="yandex_folder_id" value="{{ config.yandex_folder_id }}" {{ 'disabled' if is_demo }}>
+            <span class="desc">Не секрет — каталог Yandex Cloud. Пусто для не-Yandex.</span>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="system_prompt_override">Override системного промпта</label>
+          <textarea id="system_prompt_override" name="system_prompt_override" {{ 'disabled' if is_demo }} placeholder="Оставьте пустым — используется файл prompts/v1/system.md">{{ config.system_prompt_override }}</textarea>
+          <span class="desc">Если заполнено — переопределяет <code>prompts/v1/system.md</code> обработчика. Применяется на следующем цикле.</span>
+        </div>
+
+        <div class="actions">
+          {% if is_demo %}
+            <button type="submit" class="save" disabled title="Демо-режим: только просмотр">Сохранить (demo read-only)</button>
+          {% else %}
+            <button type="submit" class="save">Сохранить</button>
+          {% endif %}
+          <a class="logout" href="/admin/logout">Выйти</a>
+        </div>
+      </form>
+    </section>
+  </main>
+</body>
+</html>
