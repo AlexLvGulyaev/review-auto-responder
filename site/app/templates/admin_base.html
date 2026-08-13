@@ -182,7 +182,8 @@
     .ai-json-collapse[open] > summary { border-bottom: 1px solid var(--ai-border); }
     .ai-json-collapse .ai-pre { margin: 0; max-height: 420px; overflow: auto; border: none; box-shadow: none; background: transparent; }
 
-    .ai-content { flex: 1; padding: 16px 20px 20px; overflow-y: auto; min-width: 0; }
+    .ai-content { flex: 1; padding: 16px 20px 20px; overflow-y: auto; min-width: 0;
+      display: flex; flex-direction: column; }
 
     .ai-card {
       background-color: var(--ai-surface);
@@ -311,6 +312,10 @@
 
     /* ── Master-detail (Логи / Аудит) ─────────────────────────────────────── */
     .ai-master-detail { display: flex; gap: 12px; align-items: flex-start; }
+    {# --fill: панели выровнены по высоте, каждая скроллится внутри (эталон операционной консоли). #}
+    .ai-master-detail--fill { flex: 1 1 auto; min-height: 0; align-items: stretch; overflow: hidden; }
+    .ai-master-detail--fill .ai-list-panel { position: static; max-height: none; height: 100%; }
+    .ai-detail-panel-wrap { min-height: 0; }
     .ai-list-panel { width: 420px; flex-shrink: 0; position: sticky; top: 84px;
       max-height: calc(100vh - 100px); display: flex; flex-direction: column; overflow: hidden; }
     .ai-list-panel__filters { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
@@ -371,7 +376,7 @@
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.35; }
     .ai-chain { font-size: 0.78rem; color: var(--ai-text-secondary); line-height: 1.5;
       word-break: break-word; margin: 0; }
-    .ai-biz-text { max-height: 120px; overflow: auto; background: rgba(0,0,0,0.2);
+    .ai-biz-text { height: 150px; overflow: auto; background: rgba(0,0,0,0.2);
       border-radius: 6px; padding: 10px; font-size: 0.82rem; line-height: 1.45;
       white-space: pre-wrap; word-break: break-word; color: var(--ai-text); margin: 0; }
     .ai-detail-head .ai-status + .ai-status { margin-left: 6px; }

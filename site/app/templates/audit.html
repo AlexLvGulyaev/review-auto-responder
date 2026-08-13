@@ -42,7 +42,7 @@
 
     <div class="ai-list-panel__pager">
       {% if offset > 0 %}
-        <a class="ai-btn ai-btn--secondary ai-btn--small" href="?{{ fqs }}{% if fqs %}&{% endif %}offset={{ max(0, offset - limit) }}{% if selected_id %}&selected={{ selected_id }}{% endif %}">← Назад</a>
+        <a class="ai-btn ai-btn--secondary ai-btn--small" href="?{{ fqs }}{% if fqs %}&{% endif %}offset={{ [0, offset - limit] | max }}{% if selected_id %}&selected={{ selected_id }}{% endif %}">← Назад</a>
       {% else %}
         <span class="ai-btn ai-btn--secondary ai-btn--small" style="opacity:0.4;pointer-events:none;">← Назад</span>
       {% endif %}
