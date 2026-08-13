@@ -141,24 +141,23 @@
       <div class="ai-section__head">
         <div>
           <div class="ai-section__title">
-            Настройки ЛЛМ и провайдера
-            <span class="ai-tooltip">ⓘ<span class="ai-tooltip__text">Секреты (ключи API) хранятся в .env обработчика, не в config.json. Здесь — только runtime-параметры: активный/fallback провайдер, модель, Base URL, temperature, max tokens, включён. Смена применяется в runtime без рестарта.</span></span>
+            <span class="ai-tooltip">Настройки ЛЛМ и провайдера<span class="ai-tooltip__text">Секреты (ключи API) — только в .env обработчика, здесь их нет. Это runtime-параметры: смена применяется на следующем цикле опроса без рестарта (hot-reload по mtime config.json).</span></span>
           </div>
-          <div class="ai-section__subtitle">Активный / fallback провайдер и карточки.</div>
+          <div class="ai-section__subtitle">Активный и резервный провайдер, модели и параметры генерации.</div>
         </div>
       </div>
 
       {# Селекторы активного / fallback #}
       <div class="ai-provider-selects">
         <div class="ai-provider-card__field">
-          <label for="active_provider">Активный провайдер</label>
+          <label for="active_provider"><span class="ai-tooltip">Активный провайдер<span class="ai-tooltip__text">Провайдер, генерирующий ответы по умолчанию. Если он недоступен — нет ключа, выключен, ошибка вызова или пустой ответ — сработает fallback LLM, затем словарные шаблоны по тону.</span></span></label>
           <select class="ai-select" id="active_provider" name="active_provider" {{ 'disabled' if is_demo }}>
             <option value="openai" {{ 'selected' if config.active_provider == 'openai' }}>OpenAI</option>
             <option value="gigachat" {{ 'selected' if config.active_provider == 'gigachat' }}>GigaChat</option>
           </select>
         </div>
         <div class="ai-provider-card__field">
-          <label for="fallback_provider">Fallback провайдер</label>
+          <label for="fallback_provider"><span class="ai-tooltip">Fallback провайдер<span class="ai-tooltip__text">Резервный LLM, если активный недоступен (нет ключа / выключен / ошибка / пустой ответ). Должен отличаться от активного и быть включённым. Если и fallback недоступен — ответ собирается из словарных шаблонов по тону отзыва.</span></span></label>
           <select class="ai-select" id="fallback_provider" name="fallback_provider" {{ 'disabled' if is_demo }}>
             <option value="gigachat" {{ 'selected' if config.fallback_provider == 'gigachat' }}>GigaChat</option>
             <option value="openai" {{ 'selected' if config.fallback_provider == 'openai' }}>OpenAI</option>
@@ -179,11 +178,11 @@
             </div>
           </div>
           <div class="ai-provider-card__field">
-            <label for="openai_base_url">Base URL</label>
+            <label for="openai_base_url"><span class="ai-tooltip">Base URL<span class="ai-tooltip__text">Endpoint OpenAI или любого OpenAI-совместимого API: Azure OpenAI, локальные LLM (Ollama, LM Studio), корпоративный прокси. Редактируемый runtime-параметр — применяется без рестарта. Ключ API хранится в .env обработчика. У GigaChat Base URL, в отличие от OpenAI, read-only — фиксированный эндпоинт Сбера.</span></span></label>
             <input class="ai-input" id="openai_base_url" name="openai_base_url" value="{{ config.openai_base_url }}" {{ 'disabled' if is_demo }}>
           </div>
           <div class="ai-provider-card__field">
-            <label for="openai_model">Model</label>
+            <label for="openai_model"><span class="ai-tooltip">Model<span class="ai-tooltip__text">Имя модели OpenAI для генерации ответов. Должно поддерживаться указанным Base URL.</span></span></label>
             <select class="ai-select" id="openai_model" name="openai_model" {{ 'disabled' if is_demo }}>
               {% if config.openai_model not in openai_models %}<option value="{{ config.openai_model }}" selected>{{ config.openai_model }}</option>{% endif %}
               {% for m in openai_models %}<option value="{{ m }}" {{ 'selected' if config.openai_model == m }}>{{ m }}</option>{% endfor %}
@@ -191,17 +190,17 @@
           </div>
           <div class="ai-grid ai-grid--2">
             <div class="ai-provider-card__field">
-              <label for="openai_temperature">Temperature</label>
+              <label for="openai_temperature"><span class="ai-tooltip">Temperature<span class="ai-tooltip__text">Температура генерации: 0 — максимально детерминированно, 2 — креативно. Для корпоративных ответов на отзывы обычно 0.2–0.5.</span></span></label>
               <input class="ai-input" id="openai_temperature" name="openai_temperature" type="number" step="0.1" min="0" max="2" value="{{ config.openai_temperature }}" {{ 'disabled' if is_demo }}>
             </div>
             <div class="ai-provider-card__field">
-              <label for="openai_max_tokens">Max tokens</label>
+              <label for="openai_max_tokens"><span class="ai-tooltip">Max tokens<span class="ai-tooltip__text">Максимум токенов в ответе. Больше — длиннее ответ, но дороже по счёту. Для коротких ответов на отзывы ~1000 достаточно.</span></span></label>
               <input class="ai-input" id="openai_max_tokens" name="openai_max_tokens" type="number" step="1" min="1" value="{{ config.openai_max_tokens }}" {{ 'disabled' if is_demo }}>
             </div>
           </div>
           <label class="ai-provider-card__enabled">
             <input type="checkbox" name="openai_enabled" value="on" {{ 'checked' if config.openai_enabled != false }} {{ 'disabled' if is_demo }}>
-            Включён
+            <span class="ai-tooltip">Включён<span class="ai-tooltip__text">Участвует ли OpenAI в цепочке обработки. Выключенный провайдер пропускается и как активный, и как fallback — система уйдёт в словарные шаблоны.</span></span>
           </label>
           <div class="ai-actions-center">
             <button type="submit" form="test-openai" class="ai-btn ai-btn--secondary ai-btn--small" {{ 'disabled' if is_demo }}>Проверить</button>
@@ -218,11 +217,11 @@
             </div>
           </div>
           <div class="ai-provider-card__field">
-            <label for="gigachat_base_url">Base URL <span class="ai-tooltip">ⓘ<span class="ai-tooltip__text">Base URL GigaChat хранится в .env обработчика (read-only). Смена требует правки .env и рестарта воркера.</span></span></label>
+            <label for="gigachat_base_url"><span class="ai-tooltip">Base URL<span class="ai-tooltip__text">Endpoint GigaChat (Сбер). Хранится в .env обработчика как константа развёртывания — фиксированный эндпоинт Сбера с OAuth-обменом и сертификатом Минцифры. Read-only: смена требует правки .env и рестарта. У OpenAI Base URL, в отличие от GigaChat, редактируемый — для OpenAI-совместимых endpoints.</span></span></label>
             <input class="ai-input" id="gigachat_base_url" value="{{ w.gigachat_base_url or 'https://gigachat.devices.sberbank.ru/api/v1' }}" disabled>
           </div>
           <div class="ai-provider-card__field">
-            <label for="gigachat_model">Model</label>
+            <label for="gigachat_model"><span class="ai-tooltip">Model<span class="ai-tooltip__text">Имя модели GigaChat. GigaChat-Max — самая мощная, GigaChat-Pro — сбалансированная, GigaChat — базовая. Серия GigaChat-2 — новое поколение.</span></span></label>
             <select class="ai-select" id="gigachat_model" name="gigachat_model" {{ 'disabled' if is_demo }}>
               {% if config.gigachat_model not in gigachat_models %}<option value="{{ config.gigachat_model }}" selected>{{ config.gigachat_model }}</option>{% endif %}
               {% for m in gigachat_models %}<option value="{{ m }}" {{ 'selected' if config.gigachat_model == m }}>{{ m }}</option>{% endfor %}
@@ -230,17 +229,17 @@
           </div>
           <div class="ai-grid ai-grid--2">
             <div class="ai-provider-card__field">
-              <label for="gigachat_temperature">Temperature</label>
+              <label for="gigachat_temperature"><span class="ai-tooltip">Temperature<span class="ai-tooltip__text">Температура генерации GigaChat. Для предсказуемых корпоративных ответов рекомендуются низкие значения (0.1–0.3).</span></span></label>
               <input class="ai-input" id="gigachat_temperature" name="gigachat_temperature" type="number" step="0.1" min="0" max="2" value="{{ config.gigachat_temperature }}" {{ 'disabled' if is_demo }}>
             </div>
             <div class="ai-provider-card__field">
-              <label for="gigachat_max_tokens">Max tokens</label>
+              <label for="gigachat_max_tokens"><span class="ai-tooltip">Max tokens<span class="ai-tooltip__text">Максимум токенов в ответе GigaChat. GigaChat возвращает компактные ответы — ~500 обычно достаточно.</span></span></label>
               <input class="ai-input" id="gigachat_max_tokens" name="gigachat_max_tokens" type="number" step="1" min="1" value="{{ config.gigachat_max_tokens }}" {{ 'disabled' if is_demo }}>
             </div>
           </div>
           <label class="ai-provider-card__enabled">
             <input type="checkbox" name="gigachat_enabled" value="on" {{ 'checked' if config.gigachat_enabled != false }} {{ 'disabled' if is_demo }}>
-            Включён
+            <span class="ai-tooltip">Включён<span class="ai-tooltip__text">Участвует ли GigaChat в цепочке обработки. Выключенный провайдер пропускается и как активный, и как fallback.</span></span>
           </label>
           <div class="ai-actions-center">
             <button type="submit" form="test-gigachat" class="ai-btn ai-btn--secondary ai-btn--small" {{ 'disabled' if is_demo }}>Проверить</button>
@@ -255,10 +254,9 @@
       <div class="ai-section__head">
         <div>
           <div class="ai-section__title">
-            Системный промпт
-            <span class="ai-tooltip">ⓘ<span class="ai-tooltip__text">Единственный SOT — файл system_prompt.md на shared volume. Сохранение перезаписывает файл; обработчик применяет новый промпт на следующем цикле (hot-reload по mtime). Размер: {{ prompt_info.size }} байт{% if prompt_info.mtime %} · {{ prompt_info.mtime[:19] }}{% endif %}.</span></span>
+            <span class="ai-tooltip">Системный промпт<span class="ai-tooltip__text">Единственный источник промпта — файл system_prompt.md на shared volume. Сохранение перезаписывает файл; обработчик применяет новый промпт на следующем цикле опроса (hot-reload по mtime). Размер: {{ prompt_info.size }} байт{% if prompt_info.mtime %} · обновлён {{ prompt_info.mtime[:19] }}{% endif %}.</span></span>
           </div>
-          <div class="ai-section__subtitle">Единственный SOT — файл system_prompt.md на shared volume.</div>
+          <div class="ai-section__subtitle">Роль, тон и инструкции ИИ при ответе на отзывы — как компания звучит в публичных ответах.</div>
         </div>
       </div>
       <div class="ai-prompt-panel">

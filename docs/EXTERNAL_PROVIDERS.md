@@ -34,7 +34,7 @@
 
 ## 🤖 2. GigaChat (Сбер) — НЕ drop-in, требуется адаптер
 
-- **base_url:** `https://gigachat.devices.sberbank.ru/api/v1` (в `.env` воркера, read-only в карточке).
+- **base_url:** `https://gigachat.devices.sberbank.ru/api/v1` (в `.env` воркера, read-only в карточке). Фиксированный эндпоинт Сбера с OAuth-обменом и сертификатом Минцифры — константа развёртывания, смена требует правки `.env` и рестарта. У OpenAI `base_url`, в отличие от GigaChat, редактируемый в `/admin` — для OpenAI-compatible endpoints (Azure, локальные LLM, прокси).
 - **Модель:** `GigaChat-Max` (редактируется в `/admin`, поле `gigachat_model`).
 - **Temperature:** `0.1` по умолчанию (редактируется в `/admin`, поле `gigachat_temperature`).
 - **Max tokens:** `500` по умолчанию (редактируется в `/admin`, поле `gigachat_max_tokens`).
