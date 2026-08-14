@@ -1,13 +1,14 @@
 """Admin-панель аудита — read-only просмотр audit_logs.
 
-`GET /admin/audit` — список с фильтрами (action, resource_type, user_id,
-date_from, date_to, limit/offset). `GET /admin/audit/{id}` — деталь.
-Auth: `admin_auth` (demo-токен допущен — только просмотр). Read-only-просмотры
-не аудируются, чтобы не создавать self-noise (как в эталонном AuditLog).
+`GET /admin/audit` — список с фильтрами (period, action, resource_type,
+user_id, limit/offset) в стиле эталонного AuditLog (AI Curator).
+`GET /admin/audit/{id}` — деталь. Auth: `admin_auth` (demo-токен допущен —
+только просмотр). Read-only-просмотры не аудируются, чтобы не создавать
+self-noise (как в эталонном AuditLog).
 """
 from __future__ import annotations
 
-from datetime import datetime, time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -26,30 +27,33 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "app" / "templates"))
 router = APIRouter(prefix="/admin/audit", tags=["admin-audit"])
 
 
-def _parse_date(value: str | None, end_of_day: bool = False) -> datetime | None:
-    if not value:
-        return None
-    try:
-        d = datetime.strptime(value, "%Y-%m-%d")
-        return datetime.combine(d, time.max) if end_of_day else d
-    except ValueError:
-        raise HTTPException(status_code=400, detail=f"Invalid date: {value}")
+# Период-фильтр → cutoff (UTC). None/"all" → без фильтра. Как в Логах.
+_PERIOD_DELTAS = {
+    "24h": timedelta(hours=24),
+    "7d": timedelta(days=7),
+    "30d": timedelta(days=30),
+}
 
 
 @router.get("", response_class=HTMLResponse)
 async def list_audit(
     request: Request,
+    period: str | None = Query(default=None),
     action: str | None = Query(default=None),
     resource_type: str | None = Query(default=None),
     user_id_param: str | None = Query(default=None, alias="user_id"),
-    date_from: str | None = Query(default=None),
-    date_to: str | None = Query(default=None),
     selected: int | None = Query(default=None),
-    limit: int = Query(default=20, ge=1, le=500),
+    limit: int = Query(default=7, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     db: AsyncSession = Depends(get_db_session),
     identity=Depends(admin_auth),
 ) -> HTMLResponse:
+    # Нормализуем пустые поля формы → None (форма сабмитит action= и т.п.).
+    action = action.strip() or None if action else None
+    resource_type = resource_type.strip() or None if resource_type else None
+    user_id_param = user_id_param.strip() or None if user_id_param else None
+    period = period or None
+
     stmt = select(AuditLog)
     if action:
         stmt = stmt.where(AuditLog.action == action)
@@ -59,12 +63,9 @@ async def list_audit(
         stmt = stmt.where(
             (AuditLog.user_id == user_id_param) | (AuditLog.user_name == user_id_param)
         )
-    started_from = _parse_date(date_from)
-    started_to = _parse_date(date_to, end_of_day=True)
-    if started_from:
-        stmt = stmt.where(AuditLog.created_at >= started_from)
-    if started_to:
-        stmt = stmt.where(AuditLog.created_at <= started_to)
+    delta = _PERIOD_DELTAS.get(period) if period else None
+    if delta:
+        stmt = stmt.where(AuditLog.created_at >= datetime.now(timezone.utc) - delta)
 
     count_stmt = select(func.count()).select_from(stmt.subquery())
     total = await db.scalar(count_stmt) or 0
@@ -73,12 +74,12 @@ async def list_audit(
     result = await db.execute(stmt)
     entries = result.scalars().unique().all()
 
-    # Master-detail: выбранная запись для правой панели. Если selected не задан —
-    # дефолтно первая запись текущей страницы (правая панель не пуста на входе).
+    # Master-detail с pre-render: правая панель рендерит все 7 деталей страницы,
+    # видимая — selected (или дефолтно первая). Полные данные — на самой строке
+    # AuditLog, отдельный fetch не нужен (нет N+1).
     selected_id = selected
     if selected_id is None and entries:
         selected_id = entries[0].id
-    selected_entry = await db.get(AuditLog, selected_id) if selected_id is not None else None
 
     return templates.TemplateResponse(
         "audit.html",
@@ -91,13 +92,11 @@ async def list_audit(
             "limit": limit,
             "offset": offset,
             "selected_id": selected_id,
-            "selected_entry": selected_entry,
             "filters": {
+                "period": period,
                 "action": action,
                 "resource_type": resource_type,
                 "user_id": user_id_param,
-                "date_from": date_from,
-                "date_to": date_to,
             },
         },
     )

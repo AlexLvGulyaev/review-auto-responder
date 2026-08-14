@@ -2,7 +2,7 @@
 
 {% block title %}Аудит · Админка{% endblock %}
 {% block page_title %}Журнал аудита{% endblock %}
-{% block page_subtitle %}Admin/security-события: входы, смена конфига, RBAC-отказы{% endblock %}
+{% block page_subtitle %}Операционная консоль: административные действия и изменения{% endblock %}
 
 {% block page_actions %}
   <a class="ai-btn ai-btn--secondary ai-btn--small" href="{{ request.url.path }}{% if request.url.query %}?{{ request.url.query }}{% endif %}">↻ Обновить</a>
@@ -10,34 +10,82 @@
 
 {% block content %}
 
-{# Фильтры (без offset/selected) — для построения ссылок карточек и пагинатора. #}
+{# query-параметры без offset/selected — для ссылок карточек и пагинатора. #}
 {% set pairs = [] %}
 {% for k, v in request.query_params.multi_items() if k not in ('offset', 'selected') %}
   {% set _ = pairs.append((k, v)) %}
 {% endfor %}
 {% set fqs = pairs | urlencode %}
 
-{# Макрос бейджа действия аудита: error / ok / muted. #}
+{# ── Макросы ───────────────────────────────────────────────────────────── #}
 {% macro action_badge(action_val) -%}
 {% set error_actions = ['admin.rbac_denied', 'admin.login_failed', 'auth.worker_denied'] %}
 {% set ok_actions = ['admin.login_success', 'admin.config_update', 'admin.provider_test'] %}
 <span class="ai-status {% if action_val in error_actions %}ai-status--error{% elif action_val in ok_actions %}ai-status--ok{% else %}ai-status--muted{% endif %}">{{ action_val }}</span>
 {%- endmacro %}
 
-<div class="ai-master-detail">
+{# Макрос правой панели деталей для ОДНОЙ записи аудита.
+   Порядок секций — как в эталоне AuditLog: шапка → Параметры акции/пользователя
+   (side-by-side) → Детали/metadata → JSON-снимок. #}
+{% macro detail_panel(e) -%}
+  <div class="ai-detail-head">
+    <h2 class="ai-section__title">ДЕТАЛИЗАЦИЯ СОБЫТИЯ</h2>
+    <div>{{ action_badge(e.action) }}</div>
+  </div>
 
-  {# ── Левая панель: фильтры + пагинация + список карточек ────────────────── #}
+  <div class="ai-grid ai-grid--2" style="margin-bottom:12px;">
+    <div class="ai-section-box">
+      <h4 class="ai-section-box__title">Параметры акции</h4>
+      <div class="ai-compact-row"><span class="ai-compact-row__label">ID акции</span><span class="ai-compact-row__value ai-compact-row__value--mono">#{{ e.id }}</span></div>
+      <div class="ai-compact-row"><span class="ai-compact-row__label">Тип акции</span><span class="ai-compact-row__value">{{ e.action }}</span></div>
+      <div class="ai-compact-row"><span class="ai-compact-row__label">ID ресурса</span><span class="ai-compact-row__value ai-compact-row__value--mono">{{ e.resource_id or '—' }}</span></div>
+      <div class="ai-compact-row"><span class="ai-compact-row__label">Тип ресурса</span><span class="ai-compact-row__value">{{ e.resource_type or '—' }}</span></div>
+    </div>
+    <div class="ai-section-box">
+      <h4 class="ai-section-box__title">Параметры пользователя</h4>
+      <div class="ai-compact-row"><span class="ai-compact-row__label">ID пользователя</span><span class="ai-compact-row__value ai-compact-row__value--mono">{{ e.user_id or '—' }}</span></div>
+      <div class="ai-compact-row"><span class="ai-compact-row__label">Имя пользователя</span><span class="ai-compact-row__value">{{ e.user_name or '—' }}</span></div>
+      <div class="ai-compact-row"><span class="ai-compact-row__label">Роль</span><span class="ai-compact-row__value">{{ e.user_role or '—' }}</span></div>
+      <div class="ai-compact-row"><span class="ai-compact-row__label">IP-адрес</span><span class="ai-compact-row__value ai-compact-row__value--mono">{{ e.ip_address or '—' }}</span></div>
+      <div class="ai-compact-row"><span class="ai-compact-row__label">Дата события</span><span class="ai-compact-row__value">{{ e.created_at.strftime('%Y-%m-%d %H:%M:%S') if e.created_at else '—' }}</span></div>
+    </div>
+  </div>
+
+  <div class="ai-section-box ai-section-box--details" style="margin-bottom:12px;">
+    <h4 class="ai-section-box__title">Детали / metadata</h4>
+    <pre class="ai-pre">{{ e.details | tojson(indent=2) }}</pre>
+  </div>
+
+  {% set snap = {
+    "id": e.id, "action": e.action, "resource_type": e.resource_type,
+    "resource_id": e.resource_id, "user_id": e.user_id, "user_name": e.user_name,
+    "user_role": e.user_role, "ip_address": e.ip_address,
+    "created_at": e.created_at.isoformat() if e.created_at else None,
+    "details": e.details,
+  } %}
+  <details class="ai-json-collapse">
+    <summary><span class="ai-tooltip">Технический снимок события (JSON)<span class="ai-tooltip__text">Полный JSON записи аудита — все поля, включая details.</span></span></summary>
+    <pre class="ai-pre">{{ snap | tojson(indent=2) }}</pre>
+  </details>
+{%- endmacro %}
+
+<div class="ai-master-detail ai-master-detail--fill">
+
+  {# ── Левая панель: фильтры (period + action + resource_type в строку) +
+       поиск по пользователю + пагинация + список ─────────────────────────── #}
   <aside class="ai-list-panel ai-card">
-    <form method="get" action="/admin/audit" class="ai-list-panel__filters">
-      <div class="ai-field"><label>action</label><input class="ai-input" name="action" value="{{ filters.action or '' }}" placeholder="admin.config_update"></div>
-      <div class="ai-field"><label>resource_type</label><input class="ai-input" name="resource_type" value="{{ filters.resource_type or '' }}" placeholder="runtime_config"></div>
-      <div class="ai-field ai-field--full"><label>user_id / name</label><input class="ai-input" name="user_id" value="{{ filters.user_id or '' }}" placeholder="admin"></div>
-      <div class="ai-field"><label>date_from</label><input class="ai-input" type="date" name="date_from" value="{{ filters.date_from or '' }}"></div>
-      <div class="ai-field"><label>date_to</label><input class="ai-input" type="date" name="date_to" value="{{ filters.date_to or '' }}"></div>
-      <div class="ai-field ai-field--full" style="display:flex;gap:8px;">
-        <button type="submit" class="ai-btn ai-btn--small">Применить</button>
-        <a class="ai-btn ai-btn--secondary ai-btn--small" href="/admin/audit">Сбросить</a>
+    <form method="get" action="/admin/audit" class="ai-log-filters">
+      <div class="ai-filter-row">
+        <select class="ai-select" name="period" onchange="this.form.submit()">
+          <option value="" {{ 'selected' if not filters.period }}>период: все</option>
+          <option value="24h" {{ 'selected' if filters.period == '24h' }}>24ч</option>
+          <option value="7d" {{ 'selected' if filters.period == '7d' }}>7д</option>
+          <option value="30d" {{ 'selected' if filters.period == '30d' }}>30д</option>
+        </select>
+        <input class="ai-input" type="text" name="action" value="{{ filters.action or '' }}" placeholder="action" onkeydown="if(event.key==='Enter'){event.preventDefault();this.form.submit();}">
+        <input class="ai-input" type="text" name="resource_type" value="{{ filters.resource_type or '' }}" placeholder="resource_type" onkeydown="if(event.key==='Enter'){event.preventDefault();this.form.submit();}">
       </div>
+      <input class="ai-input ai-search" type="text" name="user_id" value="{{ filters.user_id or '' }}" placeholder="Поиск по user_id или user_name..." onkeydown="if(event.key==='Enter'){event.preventDefault();this.form.submit();}">
     </form>
 
     <div class="ai-list-panel__pager">
@@ -61,7 +109,7 @@
 
     <div class="ai-list-panel__scroll">
       {% for e in entries %}
-      <a class="ai-log-card {{ 'ai-log-card--active' if selected_id == e.id }}" href="?{{ fqs }}{% if fqs %}&{% endif %}offset={{ offset }}&selected={{ e.id }}">
+      <a class="ai-log-card {{ 'ai-log-card--active' if selected_id == e.id }}" data-id="{{ e.id }}" href="?{{ fqs }}{% if fqs %}&{% endif %}offset={{ offset }}&selected={{ e.id }}">
         <div class="ai-log-card__head">
           <span class="muted">{{ e.created_at.strftime('%Y-%m-%d %H:%M:%S') if e.created_at else '—' }}</span>
           {{ action_badge(e.action) }}
@@ -79,55 +127,81 @@
     </div>
   </aside>
 
-  {# ── Правая панель: детали выбранной записи ─────────────────────────────── #}
-  {% if selected_entry %}
-  <section class="ai-card ai-detail-panel">
-    <div class="ai-detail-head">
-      <h2 class="ai-section__title">ДЕТАЛИЗАЦИЯ СОБЫТИЯ</h2>
-      {{ action_badge(selected_entry.action) }}
-    </div>
-
-    <div class="ai-grid ai-grid--2" style="margin-bottom:12px;">
-      <div class="ai-section-box">
-        <h4 class="ai-section-box__title">Параметры акции</h4>
-        <div class="ai-compact-row"><span class="ai-compact-row__label">ID</span><span class="ai-compact-row__value ai-compact-row__value--mono">#{{ selected_entry.id }}</span></div>
-        <div class="ai-compact-row"><span class="ai-compact-row__label">Действие</span><span class="ai-compact-row__value">{{ selected_entry.action }}</span></div>
-        <div class="ai-compact-row"><span class="ai-compact-row__label">Ресурс</span><span class="ai-compact-row__value">{{ selected_entry.resource_type or '—' }}{% if selected_entry.resource_id %} / {{ selected_entry.resource_id }}{% endif %}</span></div>
-      </div>
-      <div class="ai-section-box">
-        <h4 class="ai-section-box__title">Параметры пользователя</h4>
-        <div class="ai-compact-row"><span class="ai-compact-row__label">Пользователь</span><span class="ai-compact-row__value">{{ selected_entry.user_name or selected_entry.user_id or '—' }}</span></div>
-        <div class="ai-compact-row"><span class="ai-compact-row__label">Роль</span><span class="ai-compact-row__value">{{ selected_entry.user_role or '—' }}</span></div>
-        <div class="ai-compact-row"><span class="ai-compact-row__label">IP-адрес</span><span class="ai-compact-row__value ai-compact-row__value--mono">{{ selected_entry.ip_address or '—' }}</span></div>
-        <div class="ai-compact-row"><span class="ai-compact-row__label">Время</span><span class="ai-compact-row__value">{{ selected_entry.created_at.strftime('%Y-%m-%d %H:%M:%S') if selected_entry.created_at else '—' }}</span></div>
-      </div>
-    </div>
-
-    <div class="ai-section-box" style="margin-bottom:12px;">
-      <h4 class="ai-section-box__title">Детали / metadata</h4>
-      <pre class="ai-pre">{{ selected_entry.details | tojson(indent=2) }}</pre>
-    </div>
-
-    {% set snap = {
-      "id": selected_entry.id,
-      "action": selected_entry.action,
-      "resource_type": selected_entry.resource_type,
-      "resource_id": selected_entry.resource_id,
-      "user_id": selected_entry.user_id,
-      "user_name": selected_entry.user_name,
-      "user_role": selected_entry.user_role,
-      "ip_address": selected_entry.ip_address,
-      "created_at": selected_entry.created_at.isoformat() if selected_entry.created_at else None,
-      "details": selected_entry.details,
-    } %}
-    <details class="ai-json-collapse">
-      <summary><span class="ai-tooltip">Технический снимок события (JSON)<span class="ai-tooltip__text">Полный JSON записи аудита — все поля, включая details.</span></span></summary>
-      <pre class="ai-pre">{{ snap | tojson(indent=2) }}</pre>
-    </details>
-  </section>
+  {# ── Правая панель: pre-render деталей всех записей страницы ───────────── #}
+  {% if entries %}
+  <div class="ai-detail-panel-wrap" style="flex:1;min-width:0;height:100%;overflow:hidden;display:flex;flex-direction:column;">
+    {% for e in entries %}
+    <section id="ai-detail-{{ e.id }}" class="ai-card ai-detail-panel" style="display:{{ 'flex' if selected_id == e.id else 'none' }}">
+      {{ detail_panel(e) }}
+    </section>
+    {% endfor %}
+  </div>
   {% else %}
   <section class="ai-card ai-detail-panel"><div class="ai-empty">Выберите запись для просмотра деталей.</div></section>
   {% endif %}
 
 </div>
+
+{# ── Навигация: клик/стрелки ↑↓ перебирают айтемы без перезагрузки ───────── #}
+{% if entries %}
+<script>
+(function(){
+  var cards = Array.prototype.slice.call(document.querySelectorAll('.ai-log-card[data-id]'));
+  var ids = cards.map(function(c){ return c.getAttribute('data-id'); });
+  function panelEl(id){ return document.getElementById('ai-detail-' + id); }
+  function selectId(id, opts){
+    opts = opts || {};
+    cards.forEach(function(c){
+      c.classList.toggle('ai-log-card--active', c.getAttribute('data-id') === id);
+    });
+    ids.forEach(function(i){ var el = panelEl(i); if(el) el.style.display = (i === id) ? 'flex' : 'none'; });
+    if(!opts.skipHistory){
+      var p = new URLSearchParams(window.location.search);
+      p.set('selected', id);
+      history.pushState({selected:id}, '', '?' + p.toString());
+    }
+    var card = cards[ids.indexOf(id)];
+    if(card && opts.scrollIntoView) card.scrollIntoView({block:'nearest'});
+  }
+  cards.forEach(function(c){
+    c.addEventListener('click', function(e){
+      e.preventDefault();
+      selectId(c.getAttribute('data-id'), {scrollIntoView:true});
+    });
+  });
+  // Стрелки курсора ↑/↓ — перебор айтемов; на границе страницы — смена страницы (reload).
+  // Guard: на последнем айтеме последней страницы ↓ не уходит в пустоту (не падает).
+  document.addEventListener('keydown', function(e){
+    if(e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    var t = e.target;
+    if(t && (t.closest('input') || t.closest('textarea') || t.closest('select') || t.isContentEditable)) return;
+    var curId = null;
+    ids.forEach(function(i){ if(panelEl(i) && panelEl(i).style.display !== 'none') curId = i; });
+    var idx = curId ? ids.indexOf(curId) : 0;
+    if(idx < 0) return;
+    if(e.key === 'ArrowDown'){
+      if(idx + 1 < ids.length){ e.preventDefault(); selectId(ids[idx+1], {scrollIntoView:true}); }
+      else if({{ offset }} + {{ limit }} < {{ total }}){ e.preventDefault(); changePage({{ offset }} + {{ limit }}); }
+      return;
+    }
+    if(e.key === 'ArrowUp'){
+      if(idx > 0){ e.preventDefault(); selectId(ids[idx-1], {scrollIntoView:true}); }
+      else if({{ offset }} > 0){ e.preventDefault(); changePage(Math.max(0, {{ offset }} - {{ limit }})); }
+    }
+  });
+  function changePage(newOffset){
+    var p = new URLSearchParams(window.location.search);
+    p.set('offset', newOffset);
+    p.delete('selected');
+    window.location.href = '?' + p.toString();
+  }
+  window.addEventListener('popstate', function(){
+    var p = new URLSearchParams(window.location.search);
+    var id = p.get('selected');
+    if(id && ids.indexOf(id) >= 0) selectId(id, {skipHistory:true});
+  });
+})();
+</script>
+{% endif %}
+
 {% endblock %}
