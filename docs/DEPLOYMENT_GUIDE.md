@@ -1,7 +1,8 @@
 # 🚀 DEPLOYMENT_GUIDE.md — Review Auto Responder
 
 **Проект:** review-auto-responder
-**Дата:** 2026-08-13
+**Дата создания:** 2026-08-13
+**Последнее обновление:** 2026-08-14
 **Статус:** Source of Truth воспроизводимости развёртывания.
 
 > 📌 **SOT-дисциплина:** этот документ — единственный источник истины процесса развёртывания. Критерий качества — **успешное развёртывание по инструкции**, а не качество текста. Если после полного выполнения система не работоспособна — документ не актуален. Валидация — запуском в чистом окружении (см. [✅ DEPLOYMENT_VALIDATION_REPORT.md](DEPLOYMENT_VALIDATION_REPORT.md)).
@@ -173,6 +174,8 @@ curl -s "http://localhost:8000/api/reviews?status=new" | python3 -m json.tool
 
 Откройте `http://localhost:8000/admin` → форма ввода токена (тёмная страница входа).
 
+![Экран входа в /admin: два пути — форма полного токена и одно-кликовой демо-вход](screenshots/RAR_admin_login.png)
+
 - **Полный доступ:** введите `ADMIN_TOKEN` → конфиг-консоль с активной кнопкой сохранения, бейдж «🛠 Администратор».
 - **Демо-доступ (одно-кликовой):** кнопка **«👁 Войти в демо-режим (только просмотр)»** на странице входа — сервер сам ставит cookie с `ADMIN_DEMO_TOKEN` (токен не попадает в браузер) → бейдж «👁 Демо-режим · только просмотр», кнопка сохранения отключена, мутации → `403` на backend. Если `ADMIN_DEMO_TOKEN` не задан — кнопка показывает «Демо-вход отключён».
 
@@ -189,6 +192,8 @@ curl -s "http://localhost:8000/api/reviews?status=new" | python3 -m json.tool
 Конфиг-консоль `/admin` (токен `ADMIN_TOKEN`) — две панели: «Настройки LLM и
 провайдера» и «Системный промпт», плюс ридонли-блок «Состояние системы».
 
+![Конфиг-консоль /admin: карточки провайдеров, промпт, ряд «Состояние системы»](screenshots/RAR_admin_config.png)
+
 1. В панели «Настройки LLM и провайдера» выберите **Активный провайдер** (select:
    `openai`/`gigachat`) и **Fallback провайдер**. В карточках провайдеров (слева
    направо) задайте per-провайдер параметры: **Base URL** (OpenAI — редактируемый,
@@ -196,6 +201,8 @@ curl -s "http://localhost:8000/api/reviews?status=new" | python3 -m json.tool
    чекбокс **Включён**. Нажмите **Сохранить** (в хидере консоли).
 2. При желании отредактируйте панель «Системный промпт» — сохранение перезаписывает
    файл `system_prompt.md` на shared volume (файл-SOT).
+
+   ![Смена системного промпта: правка и сохранение в system_prompt.md](screenshots/RAR_admin_prompt_change.png)
 3. Оставьте новый отзыв (см. §4.1).
 4. В течение цикла опроса воркер подхватит новый `config.json` и `system_prompt.md`
    (по mtime) и сгенерирует ответ через активный LLM — **без рестарта** контейнера.
@@ -218,6 +225,8 @@ LLM (1-токенный тест) через внутренний test-API во�
 проксирует запрос (`POST /admin/test-provider`, `require_admin` — demo → `403`).
 Результат — flash-сообщение: «GigaChat: готов, 663мс, 1ток» (или ошибка). LLM-ключи
 остаются на воркере — сайт их не получает. Событие пишется в аудит (`admin.provider_test`).
+
+![Toast-результат real-теста провайдера: готов, latency, токены](screenshots/RAR_admin_provider_test.png)
 
 ### 🖥️ 5.2.2. Состояние системы
 
@@ -274,11 +283,15 @@ curl -s -o /dev/null -w "%{http_code}\n" -b /tmp/demo.txt -X POST http://localho
 
 Ожидается: `303 -> .../admin`, затем `403`.
 
+![/admin под демо-входом: role-бейдж «Демо-режим: только просмотр», кнопка сохранения отключена](screenshots/RAR_admin_demo_view.png)
+
 ### 🖥️ 5.4. Демо-лимиттер публичной формы (`POST /api/reviews`)
 
 Публичная форма отзыва ограничена токенизированной демо-сессией с квотой (см.
 `SECURITY_NOTES.md` §4). Каждый `POST /api/reviews` от пользователя списывает один
 запрос из квоты; воркер exempt по `X-Worker-Token`.
+
+![Форма отзыва с демо-бейджем «Демо: осталось 5 из 5»](screenshots/RAR_site_demo_badge.png)
 
 ```bash
 # 1) Старт демо-сессии → токен (X-Demo-Token)
@@ -299,6 +312,8 @@ curl -s -o /dev/null -w "%{http_code}\n" -X POST http://localhost:8000/api/revie
 «Демо: осталось N из 5» и блокирует форму при `0`. `DEMO_ENABLED=false` отключает
 guard (только локальные тесты).
 
+![Исчерпание демо-квоты: форма заблокирована, бейдж 0 из 5](screenshots/RAR_site_quota_exhausted.png)
+
 ### 🖥️ 5.5. Панели observability (`/admin/executions`, `/admin/audit`)
 
 В `/admin` есть две дополнительные read-only панели (доступны и admin-, и
@@ -307,8 +322,13 @@ demo-токеном — только просмотр):
 - **`/admin/executions`** — трейсы обработки отзывов: каждая обработка = сессия
   со статусом (`ok`/`error`/`started`), провайдером, моделью, длительностью и
   шагами пайплайна. Шаг `llm_call` несёт `{provider, model, latency_ms, tokens, fallback_reason}`.
+
+  ![Консоль /admin/executions: master-detail «Запрос → Ответ», цепочка этапов](screenshots/RAR_admin_executions.png)
+
 - **`/admin/audit`** — журнал admin/security-событий: входы в `/admin`, смена
   конфига, RBAC-отказы, отказы `X-Worker-Token`.
+
+  ![Консоль /admin/audit: master-detail журнала admin/security-событий](screenshots/RAR_admin_audit.png)
 
 ```bash
 # Оставьте отзыв (§4.1), дождитесь обработки, затем:

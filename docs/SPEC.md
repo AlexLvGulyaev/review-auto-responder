@@ -2,8 +2,19 @@
 
 **Проект:** review-auto-responder
 **Версия:** 1.0
-**Дата:** 2026-08-13
+**Дата создания:** 2026-08-13
+**Последнее обновление:** 2026-08-14
 **Статус:** Draft — на утверждении перед IMPLEMENTATION_PLAN
+
+> 🧊 **Frozen baseline v1.0.** Этот SPEC зафиксирован как продуктовый baseline
+> версии 1.0. Дальнейшая эволюция системы (observability v1.1, AIP Dark v1.2,
+> конфиг-консоль v1.3–v1.4, демо-стандарт входа + сессионные лимиты v1.5) описана в
+> [README §9](../README.md) и [PROJECT_STATE §9](PROJECT_STATE.md) и **не входит** в
+>scope этого SPEC. Известные расхождения baseline vs as-built:
+> - **Yandex-провайдер** (§1.3, §4.2 F-WORK-5, §6, §7) — реализован в v1.0, **удалён
+>   в v1.3**; текущий as-built = OpenAI / GigaChat (см. [EXTERNAL_PROVIDERS](EXTERNAL_PROVIDERS.md)).
+> - **RBAC на `POST /api/reviews`** (§5, §8 «отложено») — вышел за baseline v1.0 и
+>   **реализован в v1.5** как токенизированный демо-лимиттер (см. [SECURITY_NOTES §3–4](SECURITY_NOTES.md)).
 
 ---
 
@@ -214,10 +225,10 @@ Review Auto Responder — автономный ассистент, которы�
 **Входит (v1.0):**
 - Сайт отзывов + обработчик, единый compose, мультипровайдерность, промпт-в-файле, web-`/admin` runtime-config, `/health`, server-side фильтр, Telegram, state-файл, fallback, APL-документация, Deployment Validation.
 
-**Не входит (отложено):**
+**Не входит (отложено за baseline v1.0):**
 - Персистентное хранилище state вместо JSON-файла — для MVP достаточно `state.json` с volume.
 - Retry с экспоненциальной задержкой на 429/5xx LLM — fallback покрывает сбой; retry — отдельное развитие.
-- RBAC на `POST /api/reviews` — legacy-модель доступа; documented.
+- ~~RBAC на `POST /api/reviews`~~ — **реализовано в v1.5** (токенизированный демо-лимиттер с квотой; см. [SECURITY_NOTES §3–4](SECURITY_NOTES.md)). За baseline v1.0 — legacy-модель доступа.
 - Заполнение поля `Review.response` — ответ публикуется дочерним комментарием (threaded); поле зарезервировано.
 
 ---

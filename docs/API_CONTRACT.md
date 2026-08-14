@@ -1,7 +1,8 @@
 # 🔌 API_CONTRACT.md — Review Auto Responder
 
 **Проект:** review-auto-responder
-**Дата:** 2026-08-13
+**Дата создания:** 2026-08-13
+**Последнее обновление:** 2026-08-14
 **Статус:** Engineering Layer — контракты HTTP API сайта.
 
 Базовый URL сайта: `http://localhost:8000` (после `docker compose up`).
@@ -51,7 +52,15 @@ Health-эндпоинт для Deployment Verification/Validation.
 
 ### 🔌 1.4. `POST /api/reviews`
 
-Создание отзыва или комментария (ответа). **Без авторизации** (legacy-модель доступа; см. [🛡️ SECURITY_NOTES.md](SECURITY_NOTES.md)).
+Создание отзыва или комментария (ответа). **Авторизация:** guard `require_demo_or_worker` —
+заголовок `X-Demo-Token` (публичная демо-сессия с квотой) **или** `X-Worker-Token`
+(воркер, exempt от квоты). См. [🛡️ SECURITY_NOTES.md §3–4](SECURITY_NOTES.md).
+
+> 📌 **Доработка (v1.5):** legacy-модель «без авторизации» заменена токенизированной
+> демо-сессией. Публичный посетитель получает короткоживущий демо-токен
+> (`POST /api/demo/start`), передаёт его заголовком `X-Demo-Token`; backend валидирует
+> токен и списывает один запрос из квоты **до** создания отзыва. Воркер — доверенный
+> внутренний вызов, exempt по `X-Worker-Token` (создаёт AI-ответ тем же эндпоинтом).
 
 **Тело:**
 ```json
@@ -66,6 +75,14 @@ Health-эндпоинт для Deployment Verification/Validation.
 - Используется и клиентом (отзыв), и воркером (ответ как дочерний комментарий с `name = AI_AUTHOR_NAME`).
 
 **Ответ:** `201 Created` — объект `ReviewRead` (как в списке).
+Заголовок ответа `X-Demo-Remaining: <N>` — остаток квоты демо-сессии (для UI-бейджа).
+
+**Коды ошибок guard'а:**
+| Код | Условие |
+|-----|---------|
+| `401 Unauthorized` | нет/невалидный `X-Demo-Token` (или сессия истекла) |
+| `403 Forbidden` | demo-режим отключён (`DEMO_ENABLED=false`) |
+| `429 Too Many Requests` | квота исчерпана / rate-limit (интервал между запросами) / слишком много сессий с IP |
 
 ### 🔌 1.5. `PATCH /api/reviews/{id}`
 
@@ -79,6 +96,70 @@ Health-эндпоинт для Deployment Verification/Validation.
 **Ответ:** `200 OK` — объект `ReviewRead`.
 
 **Без токена / неверный токен:** `401 Unauthorized` + запись `auth.worker_denied` в журнал аудита.
+
+### 🔌 1.6. Демо-сессии (`/api/demo`) — токенизация публичной формы
+
+Короткоживущие токены с квотой, ограничивающие число публикаций (1 POST = 1 LLM-генерация)
+на одного анонимного клиента. Транспорт — заголовок `X-Demo-Token`; токен хранится в
+`localStorage` браузера. **Backend — единственный SOT квоты** (UI лишь отображает).
+Таблица `demo_sessions` создаётся через `Base.metadata.create_all` (additive, без Alembic).
+
+Подробное описание трёх уровней ограничения и exempt воркера —
+[🛡️ SECURITY_NOTES.md §4](SECURITY_NOTES.md).
+
+#### 🔌 1.6.1. `POST /api/demo/start` — выпустить демо-токен
+
+Создаёт новую демо-сессию. IP-лимит сессий/час проверяется **до** создания.
+
+**Тело** (опц., пустое тело допустимо):
+```json
+{ "session_id": "optional-client-id" }
+```
+
+**Ответ:** `201` (в коде — `200` от FastAPI на POST-роуте с response_model)
+```json
+{
+  "token": "demo_a1b2c3...",
+  "session_id": null,
+  "requests_limit": 5,
+  "requests_remaining": 5,
+  "rate_limit_per_minute": 12,
+  "expires_at": "2026-08-14T11:30:00+00:00"
+}
+```
+
+**Коды ошибок:**
+| Код | Условие |
+|-----|---------|
+| `403 Forbidden` | demo-режим отключён (`DEMO_ENABLED=false`) |
+| `429 Too Many Requests` | превышен лимит сессий с IP в час (`DEMO_MAX_SESSIONS_PER_IP_PER_HOUR`) |
+
+#### 🔌 1.6.2. `GET /api/demo/status` — текущая квота по токену
+
+Токен — из заголовка `X-Demo-Token`.
+
+**Ответ:** `200 OK`
+```json
+{
+  "token": "demo_a1b2c3...",
+  "session_id": null,
+  "requests_used": 2,
+  "requests_limit": 5,
+  "requests_remaining": 3,
+  "expires_at": "2026-08-14T11:30:00+00:00",
+  "is_active": true
+}
+```
+
+**Коды ошибок:**
+| Код | Условие |
+|-----|---------|
+| `401 Unauthorized` | нет заголовка `X-Demo-Token` |
+| `403 Forbidden` | demo-режим отключён |
+
+> 📌 `is_active = false` если сессия деактивирована или истёк `expires_at`
+> (`DEMO_SESSION_TTL_MINUTES`). Квота не сбрасывается при смене IP — стабильная
+> единица учёта токен. Очистка `localStorage` = новая сессия = новая квота.
 
 ---
 
@@ -103,6 +184,7 @@ Health-эндпоинт для Deployment Verification/Validation.
 | `GET` | `/admin` | Конфиг-консоль: настройки провайдеров + промпт (файл-SOT) + блок «Состояние системы» (ридонли) | `admin_auth` (demo допущен) |
 | `GET` | `/admin/login` | Форма ввода токена | — |
 | `POST` | `/admin/login` | Логин: установка cookie `admin_token` (8 ч) | — |
+| `POST` | `/admin/login/demo` | Одно-кликовой демо-вход: сервер ставит cookie с `ADMIN_DEMO_TOKEN` (токен не попадает в браузер); `?error=demo_unavailable` если demo-токен не задан | — |
 | `POST` | `/admin/logout` | Удаление cookie | — |
 | `POST` | `/admin` | Сохранение runtime-config в `config.json` + промпта в `system_prompt.md` | `require_admin` (demo → `403`) |
 | `POST` | `/admin/test-provider` | Real-тест провайдера (проксирует во внутренний test-API воркера) | `require_admin` (demo → `403`) |
@@ -299,6 +381,7 @@ HTML: параметры сессии (статус/провайдер/моде�
 | Action | Триггер |
 |--------|---------|
 | `admin.login_success` / `admin.login_failed` | `POST /admin/login` |
+| `admin.login_success` (demo) | `POST /admin/login/demo` — `role=demo`, `details.entry=demo_button` (отличим от входа по токену) |
 | `admin.config_update` | `POST /admin` (успешное сохранение) |
 | `admin.rbac_denied` | demo-попытка мутации → `403` |
 | `auth.worker_denied` | плохой `X-Worker-Token` на `PATCH /api/reviews` / `/api/executions` → `401` |

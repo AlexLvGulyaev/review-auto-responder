@@ -3,7 +3,7 @@
 **Проект:** review-auto-responder
 **Дата создания:** 2026-08-13
 **Последнее обновление:** 2026-08-14
-**Статус:** ✅ Портфельный актив. Реализован, прошёл Deployment Validation (17/17 PASS), опубликован как публичный репозиторий с живым демо. v1.1: демо-стандарт входа в админку + сессионные ограничения сайта отзывов.
+**Статус:** ✅ Портфельный актив. Реализован, прошёл Deployment Validation (17/17 PASS), опубликован как публичный репозиторий с живым демо. v1.5: демо-стандарт входа в админку + сессионные ограничения сайта отзывов.
 
 ---
 
@@ -61,7 +61,7 @@
 ### 🟢 Низкий приоритет
 
 - [x] **Server-side фильтр `?status=new`** — реализован серверный фильтр вместо клиентского по полному списку.
-- [x] **Auth-симметрия** — `POST /api/reviews` ограничен токенизированной демо-сессией с квотой (`X-Demo-Token`); чтение открыто; токен-guard на `PATCH` (воркер); демо-RBAC на `/admin` + одно-кликовой демо-вход. Реализовано в v1.1 (см. SECURITY_NOTES §3–4).
+- [x] **Auth-симметрия** — `POST /api/reviews` ограничен токенизированной демо-сессией с квотой (`X-Demo-Token`); чтение открыто; токен-guard на `PATCH` (воркер); демо-RBAC на `/admin` + одно-кликовой демо-вход. Реализовано в v1.5 (см. SECURITY_NOTES §3–4).
 - [x] **Мёртвое поле `response`** — колонка `Review.response` зарезервирована; ответ публикуется дочерним комментарием (threaded-структура).
 
 ---
@@ -90,7 +90,7 @@
 | Промпт в коде — сложно варьировать (legacy) | — | — | ✅ Митигировано: `system_prompt.md` (файл-SOT) + правка через `/admin` |
 | Два отдельных compose (legacy) — сложно воспроизвести | — | — | ✅ Митигировано: единый compose + DEPLOYMENT_GUIDE |
 | Нет `/health` (legacy) — Deployment Validation затруднена | — | — | ✅ Митигировано: health-эндпоинты добавлены |
-| Auth-асимметрия — открытые POST/чтение | — | — | ✅ Митигировано (v1.1): `POST /api/reviews` ограничен токенизированной демо-сессией с квотой; чтение открыто |
+| Auth-асимметрия — открытые POST/чтение | — | — | ✅ Митигировано (v1.5): `POST /api/reviews` ограничен токенизированной демо-сессией с квотой; чтение открыто |
 | Качество ответа зависит от промпта/модели | Средняя | Среднее | Версионирование промптов, fallback, execution-tracing метрик LLM |
 
 ---
@@ -111,8 +111,8 @@
 | Контейнеризация | Docker Compose (единый) | ✅ |
 | Runtime-config | `/admin` → `config.json` (shared volume), hot-reload по mtime | ✅ |
 | Observability | stdout-логирование + execution-tracing + аудит | ✅ |
-| Демо-лимиттер | Токенизированные сессии с квотой на публичную форму (3 уровня) | ✅ v1.1 |
-| Демо-вход в админку | Одно-кликовой server-side demo-login (cookie, токен не в браузере) | ✅ v1.1 |
+| Демо-лимиттер | Токенизированные сессии с квотой на публичную форму (3 уровня) | ✅ v1.5 |
+| Демо-вход в админку | Одно-кликовой server-side demo-login (cookie, токен не в браузере) | ✅ v1.5 |
 
 ---
 
@@ -183,7 +183,7 @@
 | 2026-08-13 | AIP Dark + file-SOT | Редизайн админки в домстиле AIP Dark (sidebar, 4 консоли); промпт — файл-SOT на shared volume (`system_prompt.md`, bootstrap из `prompts/v1/system.md`); консоль состояния системы `/admin/status` + `status.json` воркера в shared volume (liveness + bool-флаги провайдеров, без секретов) |
 | 2026-08-13 | Конфиг-консоль v1.3 | Двухколоночный лэйаут конфиг-консоли (карточки провайдеров OpenAI/GigaChat слева, промпт справа); ряд состояния системы — 5 плиток (PostgreSQL/Воркер/LLM/Telegram/API); per-provider модели (`gigachat_model`); Yandex-провайдер убран из кода и docs |
 | 2026-08-13 | Конфиг-консоль v1.4 | Паритет с эталонной Admin Console: единый статический хидер «Admin Console» + зелёный «Zerocoder»; role-бейдж в сайдбаре; per-console page-header. Две панели («Настройки LLM и провайдера» | «Системный промпт») side-by-side; карточки провайдеров слева направо со всеми параметрами (Base URL/Model/Temperature/Max tokens/Включён/Проверить); active/fallback LLM-chain; тултипы вместо inline-текстов; шрифты выровнены под эталон. Внутренний test-API воркера (`worker/api.py`, stdlib asyncio, порт 8001 не публикуется) + site-proxy `/admin/test-provider` — real-тест «Проверить» без передачи ключей на сайт |
-| 2026-08-14 | v1.1: demo-standard + session limits | Две оставшиеся «обязи» v1.0 закрыты. **Фича A — демо-стандарт входа в админку:** одно-кликовой демо-вход (`POST /admin/login/demo`) — сервер сам ставит cookie с `ADMIN_DEMO_TOKEN`, токен не попадает в браузер (строже, чем запекание в SPA-бандл); страница входа `admin_login.html` в стиле AIP Dark с двумя путями (токен / демо-кнопка), `?error=demo_unavailable` если demo-токен не задан; audit `admin.login_success role=demo details.entry=demo_button`. **Фича B — сессионные ограничения сайта отзывов:** токенизированный демо-лимиттер с квотой на публичный `POST /api/reviews` — модель `DemoSession` + `DemoLimiterService` (3 уровня: sessions/IP/час, rate-limit, квота 5/сессию), `POST /api/demo/start` + `GET /api/demo/status`, транспорт header `X-Demo-Token` + localStorage; воркер exempt по `X-Worker-Token` (создаёт AI-ответ через тот же эндпоинт — `worker/client.py` теперь шлёт X-Worker-Token на POST); guard `require_demo_or_worker` в routes.py; UI-бейдж «Демо: осталось N из 5», блокировка формы при 0. `DEMO_ENABLED=true` (дефолт публичного демо), env-tunable `DEMO_*`. Таблица `demo_sessions` создаётся через `Base.metadata.create_all` (additive, без Alembic). Верифицировано end-to-end: start 200+token/limit=5, status 200/401, квота 5×201 (X-Demo-Remaining 4→0) + 6-й 429, rate-limit 429, worker-exempt 201, regression GET 200/PATCH 401. Документация актуализирована (SECURITY_NOTES §3-4/§6, DEPLOYMENT_GUIDE env+§5.3/§5.4, .env.example). Визуальная проверка UI — глазами пользователя (модель GLM скриншоты не открывает) |
+| 2026-08-14 | v1.5: demo-standard + session limits | Две оставшиеся «обязи» v1.0 закрыты. **Фича A — демо-стандарт входа в админку:** одно-кликовой демо-вход (`POST /admin/login/demo`) — сервер сам ставит cookie с `ADMIN_DEMO_TOKEN`, токен не попадает в браузер (строже, чем запекание в SPA-бандл); страница входа `admin_login.html` в стиле AIP Dark с двумя путями (токен / демо-кнопка), `?error=demo_unavailable` если demo-токен не задан; audit `admin.login_success role=demo details.entry=demo_button`. **Фича B — сессионные ограничения сайта отзывов:** токенизированный демо-лимиттер с квотой на публичный `POST /api/reviews` — модель `DemoSession` + `DemoLimiterService` (3 уровня: sessions/IP/час, rate-limit, квота 5/сессию), `POST /api/demo/start` + `GET /api/demo/status`, транспорт header `X-Demo-Token` + localStorage; воркер exempt по `X-Worker-Token` (создаёт AI-ответ через тот же эндпоинт — `worker/client.py` теперь шлёт X-Worker-Token на POST); guard `require_demo_or_worker` в routes.py; UI-бейдж «Демо: осталось N из 5», блокировка формы при 0. `DEMO_ENABLED=true` (дефолт публичного демо), env-tunable `DEMO_*`. Таблица `demo_sessions` создаётся через `Base.metadata.create_all` (additive, без Alembic). Верифицировано end-to-end: start 200+token/limit=5, status 200/401, квота 5×201 (X-Demo-Remaining 4→0) + 6-й 429, rate-limit 429, worker-exempt 201, regression GET 200/PATCH 401. Документация актуализирована (SECURITY_NOTES §3-4/§6, DEPLOYMENT_GUIDE env+§5.3/§5.4, .env.example). Визуальная проверка UI — глазами пользователя (модель GLM скриншоты не открывает) |
 
 ---
 

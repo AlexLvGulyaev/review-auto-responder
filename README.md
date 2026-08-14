@@ -8,6 +8,26 @@
 
 ---
 
+## 🎬 Демо-тур
+
+Короткий визуальный обзор системы. Полный скриншот-тур — в [🎬 `docs/SYSTEM_DEMO.md`](docs/SYSTEM_DEMO.md).
+
+**Публичный сайт отзывов** — посетитель оставляет отзыв, воркер автономно отвечает от `AI Support` в той же ветке:
+
+![Сайт отзывов: форма слева, тред с отзывами и ответами AI Support справа](docs/screenshots/RAR_site_thread.png)
+
+**Операторская панель `/admin`** — вход (полный токен или одно-кликовой демо-вход) и конфиг-консоль runtime-переключения провайдера/модели/промпта:
+
+![Вход в /admin: два пути — токен и демо-кнопка](docs/screenshots/RAR_admin_login.png)
+
+![Конфиг-консоль /admin: карточки провайдеров, промпт, состояние системы](docs/screenshots/RAR_admin_config.png)
+
+**Telegram-уведомление оператору** — каждый новый отзыв с тональностью:
+
+![Telegram-уведомление оператору о новом отзыве](docs/screenshots/RAR_tg_review_notification.png)
+
+---
+
 ## 🎯 1. Что это
 
 Команда поддержки получает отзывы через публичный сайт. Вместо ручного мониторинга страницы:
@@ -93,6 +113,8 @@ docker compose up -d --build
 
 ## 📚 7. Документация
 
+- [📖 `docs/USER_GUIDE.md`](docs/USER_GUIDE.md) — как пользоваться сайтом отзывов.
+- [🎬 `docs/SYSTEM_DEMO.md`](docs/SYSTEM_DEMO.md) — скриншот-тур по системе.
 - [🏗️ `docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — архитектура и путь данных.
 - [📋 `docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) — технический план.
 - [🔌 `docs/API_CONTRACT.md`](docs/API_CONTRACT.md) — контракты HTTP API.
@@ -138,3 +160,4 @@ docker compose up -d --build
 | 2026-08-13 | 1.2 | AIP Dark-редизайн админки (sidebar, 4 консоли); промпт — файл-SOT на shared volume (`system_prompt.md`, bootstrap из `prompts/v1/system.md`); консоль состояния системы `/admin/status` (БД-пробы, метрики, liveness воркера через `status.json` в shared volume, статус провайдеров) |
 | 2026-08-13 | 1.3 | Конфиг-консоль: двухколоночный лэйаут (карточки провайдеров OpenAI/GigaChat слева, промпт справа); ряд состояния системы — 5 плиток (PostgreSQL/Воркер/LLM/Telegram/API); per-provider модели (`gigachat_model`); Yandex-провайдер убран из кода и docs |
 | 2026-08-13 | 1.4 | Паритет конфиг-консоли с эталонной Admin Console: единый хидер «Admin Console» + «Zerocoder», role-бейдж в сайдбаре, per-console page-header; две панели side-by-side («Настройки LLM и провайдера» \| «Системный промпт»); карточки провайдеров слева направо со всеми параметрами (Base URL/Model/Temperature/Max tokens/Включён/Проверить); active/fallback LLM-цепочка; тултипы вместо inline-текстов; выровнены шрифты. «Проверить» — real-тест через внутренний test-API воркера (`worker/api.py`, stdlib asyncio, порт не публикуется) + site-proxy `/admin/test-provider` (ключи только на воркере) |
+| 2026-08-14 | 1.5 | Демо-стандарт входа и сессионные лимиты: одно-кликовой демо-вход в `/admin` (сервер ставит cookie, токен не попадает в браузер) + токенизированный демо-лимиттер публичной формы `POST /api/reviews` (квота 5/сессию, 3 уровня — sessions/IP/час, rate-limit, квота; воркер exempt по `X-Worker-Token`) |

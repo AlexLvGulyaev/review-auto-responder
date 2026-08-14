@@ -1,7 +1,8 @@
 # 🏗️ ARCHITECTURE.md — Review Auto Responder
 
 **Проект:** review-auto-responder
-**Дата:** 2026-08-13
+**Дата создания:** 2026-08-13
+**Последнее обновление:** 2026-08-14
 **Статус:** Engineering Layer — архитектура и путь данных.
 
 ---
@@ -126,6 +127,13 @@ flowchart TD
     S -->|reads status.json + config.json + system_prompt.md| SV[(shared volume runtime-config)]
 ```
 
+> 🖼️ **Результат data-flow на публичном сайте:**
+> ![Отзыв опубликован в треде, воркер сгенерировал ответ AI Support, демо-бейдж квоты уменьшился](screenshots/RAR_site_review_posted.png)
+>
+> Клиент оставил отзыв → воркер автономно определил тон, сгенерировал ответ через
+> GigaChat и опубликовал его как дочерний комментарий в треде. Демо-бейдж квоты
+> уменьшился (воркер exempt от квоты по `X-Worker-Token`).
+
 Админка `/admin` — 4 раздела в sidebar-лэйауте (домстиль AIP Dark): **Логин**
 (standalone), **Конфиг-консоль** (настройки провайдеров + промпт-файл-SOT +
 ридонли-блок «Состояние системы»), **Обсервабилити** (`/admin/executions`),
@@ -230,6 +238,14 @@ flowchart TD
 на отзыв. При падении воркера остаётся `started`-сессия (видна как зависшая —
 диагностический признак). Просмотр: `/admin/executions` (read-only, demo допущен).
 
+> 🖼️ **Консоль «Логи» (`/admin/executions`) — master-detail «Запрос → Ответ»:**
+> ![Список обработок с фильтрами + правая панель с цепочкой этапов пайплайна и метриками](screenshots/RAR_admin_executions.png)
+>
+> Левая панель — список обработок с фильтрами (период/статус/тон) и поиском по
+> `review_id`; правая — цепочка этапов пайплайна (получение → классификация тона →
+> генерация LLM → сохранение → отметка обработано) с per-step-метриками
+> latency/токенов и таймлайном.
+
 ### 📊 7.3. Контур 3 — audit (БД, admin/security-события)
 
 БД-персистентный контур admin/security-событий в `audit_logs`. Записывает
@@ -239,6 +255,7 @@ flowchart TD
 | Action | Когда | details |
 |--------|-------|---------|
 | `admin.login_success` / `admin.login_failed` | вход в `/admin` | ip, path |
+| `admin.login_success` (demo) | одно-кликовой демо-вход (`POST /admin/login/demo`) | role=demo, `entry=demo_button` (отличим от входа по токену) |
 | `admin.config_update` | сохранение runtime-config | active/fallback/enabled, model/base_url/temperature/max_tokens per-провайдер, prompt_len, prompt_changed, changed_keys (без текста промпта) |
 | `admin.provider_test` | кнопка «Проверить» (real-тест провайдера) | provider, ok, результат (latency/tokens/message), error |
 | `admin.rbac_denied` | demo-попытка мутации → 403 | ip, path |
@@ -261,7 +278,7 @@ demo допущен). Секреты и полный текст промпт-ove
 | `audit_logs` | 3 | БД (`/admin/audit`) | Журнал admin/security-событий |
 | `state.json` | — | воркер | Идемпотентность (не observability) |
 
-### 📊 7.4. Консоль состояния системы (`/admin/status`)
+### 📊 7.5. Консоль состояния системы (`/admin/status`)
 
 Read-only обзор здоровья: `overall` (ok/degraded) + живые пробы компонентов
 (`database` — `SELECT 1` + latency) +
