@@ -16,10 +16,7 @@
 {% set active_prov = w.current_provider if w.available else none %}
 {% set db = status.components.database %}
 
-{# ── Демо-режим (постоянный баннер, только demo) ─────────────────────────── #}
-{% if is_demo %}
-  <div class="ai-alert ai-alert--demo">Демо-режим. Просмотр разрешён, изменение конфигурации заблокировано на backend (POST /admin → 403).</div>
-{% endif %}
+{# ── Демо-режим: индикатор только в сайдбаре (role-бейдж), баннер убран ──── #}
 
 {# ── Состояние системы (ридонли) ────────────────────────────────────────── #}
 <section class="ai-card">
