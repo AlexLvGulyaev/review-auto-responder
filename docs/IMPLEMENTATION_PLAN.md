@@ -10,29 +10,28 @@
 
 ```mermaid
 flowchart TD
-    subgraph Site["Сайт отзывов (review-site)"]
-        U["Клиент · Web UI"] -->|POST /api/reviews| API["FastAPI · api/routes.py"]
-        API --> DB[("PostgreSQL · reviews")]
-        API -->|GET /api/reviews?status=new| W
-        OP["Оператор-настройщик"] -->|token-cookie| ADM["/admin · api/admin.py"]
-        ADM -->|write| CFG[("config.json · shared volume")]
+    subgraph Site["review-site · FastAPI"]
+        UI["Web UI + API"]
+        ADM["/admin"]
+        DB[("PostgreSQL")]
+        CFG[("config.json<br/>+ system_prompt.md")]
+        UI --> DB
+        ADM --> CFG
     end
-    subgraph Worker["Обработчик (review-worker)"]
-        CFG -->|mtime hot-reload| RC["runtime_config.py"]
-        W["worker.py · основной цикл"] -->|fetch_new_reviews| CL["client.py · HTTP-транспорт"]
-        W -->|detect_tone| PR["processor.py · словарный классификатор"]
-        W -->|generate_response| PRV["providers/ · фабрика по runtime provider"]
-        PRV -->|промпт| PL["prompt_loader.py · prompts/v1/system.md + override"]
-        RC --> PRV
-        RC --> PL
-        W -->|уведомление| TG["telegram_bot.py"]
-        W -->|идемпотентность| ST["state.py · state.json"]
-        W -->|heartbeat| HB["data/heartbeat.json"]
-        W -->|execution-tracing| EX["POST/PATCH /api/executions · API сайта"]
+    subgraph Worker["review-worker · asyncio"]
+        LOOP["worker.py — цикл"]
+        CL["client.py"]
+        PROC["processor.py"]
+        PRV["providers — openai · gigachat"]
+        TG["telegram_bot"]
+        LOOP --> CL
+        LOOP --> PROC
+        PROC --> PRV
+        LOOP -.-> TG
     end
-    CL -->|"PATCH /api/reviews/{id} + X-Worker-Token"| API
-    CL -->|POST /api/reviews · дочерний ответ| API
-    PRV -.fallback.-> PR
+    CL <-->|"API сайта · X-Worker-Token"| UI
+    CFG -.->|"hot-reload"| PROC
+    PRV -.->|"сбой → fallback"| PROC
 ```
 
 Путь данных (детально — в `docs/ARCHITECTURE.md`):

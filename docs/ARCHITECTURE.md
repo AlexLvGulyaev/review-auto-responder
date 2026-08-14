@@ -213,27 +213,22 @@ erDiagram
 
 ```mermaid
 flowchart TD
-    C([Клиент]) -->|POST /api/demo/start| S[review-site]
-    S -->|DemoSession token+limit=5| DB[(PostgreSQL)]
-    C -->|POST /api/reviews X-Demo-Token| S
-    S -->|require_demo_or_worker guard · insert status=new| DB
-    W[review-worker] -->|GET /api/reviews?status=new| S
-    S -->|только new| W
-    W -->|POST /api/executions start| S
-    S -->|execution_session status=started| DB
-    W -->|detect_tone словарь| W
-    W -->|Telegram notify опционально| T([Оператор])
-    W -->|build_provider runtime-config| P[LLM-провайдер]
-    P -->|ответ + meta| W
-    W -->|POST /api/reviews parent_id X-Worker-Token exempt| S
-    S -->|insert ответ status=new| DB
-    W -->|"PATCH /api/reviews/{id} · X-Worker-Token · status=processed"| S
-    W -->|PATCH ответа status=processed| S
-    W -->|"PATCH /api/executions/{id} · finish + steps"| S
-    S -->|execution_session ok/error + steps| DB
-    W -->|status.json shared volume| SV2[(/data/runtime/status.json)]
-    S -->|reads status.json + config.json + system_prompt.md| SV[(shared volume runtime-config)]
+    C([Посетитель]) --> S["review-site"]
+    S --> DB[("PostgreSQL")]
+    W["review-worker"] -->|"опрос new"| S
+    W --> PR["detect_tone<br/>+ генерация"]
+    PR --> LLM["LLM<br/>active → fallback"]
+    LLM --> PR
+    PR -->|"ответ + processed"| S
+    PR -.->|"уведомление"| T([Оператор])
+    S <--> V[("shared volume<br/>config · промпт · status")]
+    W <--> V
 ```
+
+> 📌 На схеме условно не показаны: демо-токен публичной формы (`POST /api/demo/start`
+> → заголовок `X-Demo-Token`, квота 5/сессию; воркер exempt по `X-Worker-Token`) и
+> execution-tracing (`POST`/`PATCH /api/executions` — двухфазная запись трассы).
+> Пошаговая последовательность с этими этапами — в §5.2.
 
 > 🖼️ **Результат на публичном сайте:**
 > ![Отзыв опубликован в треде, воркер сгенерировал ответ AI Support, демо-бейдж квоты уменьшился](screenshots/RAR_site_review_posted.png)
