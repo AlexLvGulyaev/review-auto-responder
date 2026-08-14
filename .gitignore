@@ -6,7 +6,6 @@
 # Внутренние артефакты лаборатории (не публикуются)
 attachments/
 task_history/
-docs/SPEC.md
 
 # Локальные данные / state воркера
 site/data/
