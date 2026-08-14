@@ -19,12 +19,22 @@ class Settings(BaseSettings):
     # с X-Worker-Token. LLM-ключи остаются на воркере — сайт их не получает.
     worker_test_url: str = "http://review-worker:8001"
 
-    # /admin — демо-RBAC (паттерн admin-console-read-only-demo-rbac).
+    # /admin — демо-RBAC на два токена.
     # ADMIN_TOKEN — полный доступ (мутации); ADMIN_DEMO_TOKEN — read-only.
     # admin_auth_enabled=False отключает auth (для тестов/локального режима).
     admin_token: str = "change-me"
     admin_demo_token: str = ""
     admin_auth_enabled: bool = True
+
+    # Демо-сессии публичного сайта отзывов (токенизированный лимиттер с квотой).
+    # Каждый POST /api/reviews от пользователя → воркер → LLM-генерация (расход),
+    # поэтому публичная форма ограничена короткоживущими токенами с квотой.
+    # demo_enabled=False отключает guard (для тестов/локального режима).
+    demo_enabled: bool = True
+    demo_max_requests_per_session: int = 5  # 1 POST = 1 LLM-генерация
+    demo_session_ttl_minutes: int = 30
+    demo_rate_limit_per_minute: int = 12  # → 5 сек между запросами
+    demo_max_sessions_per_ip_per_hour: int = 5
 
     # Shared volume paths: /admin writes config.json here, worker hot-reloads it.
     runtime_config_path: str = "/data/runtime/config.json"

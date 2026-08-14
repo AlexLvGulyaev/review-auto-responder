@@ -8,8 +8,9 @@
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700&display=swap');
     :root {
       --ai-bg:#0b0f19; --ai-surface:#151b2b; --ai-border:#273043;
-      --ai-text:#f1f5f9; --ai-text-muted:#8b95a7; --ai-primary:#2f7bff;
-      --ai-primary-hover:#1d62d9; --ai-error:#ef4444; --ai-radius:10px;
+      --ai-text:#f1f5f9; --ai-text-secondary:#cbd5e1; --ai-text-muted:#8b95a7;
+      --ai-primary:#2f7bff; --ai-primary-hover:#1d62d9; --ai-error:#ef4444;
+      --ai-warning:#f59e0b; --ai-radius:10px;
       --ai-font-display:'Outfit',-apple-system,BlinkMacSystemFont,sans-serif;
       --ai-font-body:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;
     }
@@ -48,6 +49,23 @@
       font: inherit; font-weight: 600; cursor: pointer; transition: background 0.15s;
     }
     button:hover { background: var(--ai-primary-hover); }
+    .btn-outline {
+      background: transparent; color: var(--ai-text-secondary);
+      border: 1px solid var(--ai-border);
+    }
+    .btn-outline:hover { background: rgba(255,255,255,0.04); border-color: var(--ai-primary); color: var(--ai-text); }
+    .divider {
+      display: flex; align-items: center; gap: 10px;
+      margin: 18px 0 0; color: var(--ai-text-muted); font-size: 0.75rem;
+    }
+    .divider::before, .divider::after {
+      content: ""; flex: 1; height: 1px; background: var(--ai-border);
+    }
+    .demo-note {
+      margin-top: 12px; padding: 10px 12px; border-radius: var(--ai-radius);
+      border: 1px solid rgba(245,158,11,0.25); background: rgba(245,158,11,0.08);
+      color: var(--ai-warning); font-size: 0.82rem; line-height: 1.45;
+    }
     .error { color: var(--ai-error); font-size: 0.85rem; margin-top: 12px; }
     .back { display: inline-block; margin-top: 16px; color: var(--ai-text-muted); font-size: 0.8rem; text-decoration: none; }
     .back:hover { color: var(--ai-text); }
@@ -60,13 +78,25 @@
       <span class="brand__name">Review Auto Responder</span>
     </div>
     <h1>Админка · вход</h1>
-    <p class="hint">Введите токен доступа. <strong>ADMIN_TOKEN</strong> — полный доступ (смена провайдера, модели, промпта). <strong>ADMIN_DEMO_TOKEN</strong> — только просмотр.</p>
-    <form method="post" action="/admin/login">
-      <label for="token">Токен</label>
+    <p class="hint">Полный доступ — по токену оператора. Или войдите в демо-режим, чтобы посмотреть консоль без прав изменения.</p>
+
+    <form method="post" action="/admin/login" autocomplete="off">
+      <label for="token">Токен полного доступа</label>
       <input id="token" name="token" type="password" placeholder="вставьте токен" autofocus required>
       <button type="submit">Войти</button>
-      {% if error %}<div class="error">{{ error }}</div>{% endif %}
+      {% if error and error != 'demo_unavailable' %}<div class="error">{{ error }}</div>{% endif %}
     </form>
+
+    <div class="divider">или</div>
+
+    <form method="post" action="/admin/login/demo" autocomplete="off">
+      <button type="submit" class="btn-outline">👁 Войти в демо-режим (только просмотр)</button>
+    </form>
+
+    {% if error == 'demo_unavailable' %}
+      <div class="demo-note">Демо-вход отключён на этом экземпляре. Обратитесь к оператору за токеном доступа.</div>
+    {% endif %}
+
     <a class="back" href="/">← к отзывам</a>
   </main>
 </body>

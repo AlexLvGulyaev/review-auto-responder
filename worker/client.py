@@ -36,6 +36,7 @@ class ReviewSiteClient:
         async with httpx.AsyncClient(timeout=15.0) as client:
             response = await client.post(
                 f"{self._base_url}/api/reviews",
+                headers=self._headers,
                 json=payload.model_dump(mode="json", exclude_none=True),
             )
             response.raise_for_status()

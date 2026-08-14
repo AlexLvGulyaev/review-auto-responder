@@ -46,6 +46,11 @@ cp .env.example .env
 | `ADMIN_TOKEN` | да | Полный доступ к `/admin` |
 | `ADMIN_DEMO_TOKEN` | да | Read-only доступ к `/admin` (демо) |
 | `ADMIN_AUTH_ENABLED` | нет | `true` (по умолчанию); `false` — только локальные тесты |
+| `DEMO_ENABLED` | нет | `true` (по умолчанию) — токенизированный лимиттер с квотой на публичную форму `POST /api/reviews`; `false` — только локальные тесты |
+| `DEMO_MAX_REQUESTS_PER_SESSION` | нет | Квота публикаций на демо-сессию (по умолчанию `5`; 1 POST = 1 LLM-генерация) |
+| `DEMO_SESSION_TTL_MINUTES` | нет | Срок жизни демо-токена, мин (по умолчанию `30`) |
+| `DEMO_RATE_LIMIT_PER_MINUTE` | нет | Rate-limit внутри сессии (по умолчанию `12` → 5 сек между запросами) |
+| `DEMO_MAX_SESSIONS_PER_IP_PER_HOUR` | нет | Лимит сессий с одного IP в час (по умолчанию `5`) |
 | `OPENAI_API_KEY` | один из провайдеров | OpenAI |
 | `GIGACHAT_AUTH_KEY` | один из провайдеров | GigaChat |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_USER_CHAT_ID` | нет | Уведомления оператору (без них — пропуск) |
@@ -54,6 +59,12 @@ cp .env.example .env
 | `WORKER_TEST_URL` | нет | Адрес внутреннего test-API воркера для сайта (по умолчанию `http://review-worker:8001`; задаётся в compose) |
 | `WORKER_POLL_INTERVAL` | нет | Интервал опроса, сек (по умолчанию `10`) |
 | `LOG_LEVEL` | нет | Уровень stdout-логирования обоих сервисов (`DEBUG`/`INFO`/`WARNING`/...; по умолчанию `INFO`) |
+
+> 📌 **Демо-лимиттер (публичная форма).** `DEMO_*` — не секреты, дефолты рабочих
+> значений подходят для публичного демо. Посетитель получает короткоживущий
+> демо-токен (`POST /api/demo/start`, заголовок `X-Demo-Token`), квота списывается
+> до создания отзыва. Воркер exempt по `X-Worker-Token` (создаёт AI-ответ через
+> тот же `POST /api/reviews`). См. `docs/SECURITY_NOTES.md` §4.
 
 > ⚠️ **Минимум для запуска:** БД-переменные + `WORKER_API_TOKEN` + `ADMIN_TOKEN` + `ADMIN_DEMO_TOKEN`. Без LLM-ключа воркер уйдёт в fallback (словарные шаблоны) — система отвечает, но без нейросети.
 
@@ -163,7 +174,7 @@ curl -s "http://localhost:8000/api/reviews?status=new" | python3 -m json.tool
 Откройте `http://localhost:8000/admin` → форма ввода токена (тёмная страница входа).
 
 - **Полный доступ:** введите `ADMIN_TOKEN` → конфиг-консоль с активной кнопкой сохранения, бейдж «🛠 Администратор».
-- **Демо-доступ:** введите `ADMIN_DEMO_TOKEN` → бейдж «👁 Демо-режим · только просмотр», кнопка сохранения отключена.
+- **Демо-доступ (одно-кликовой):** кнопка **«👁 Войти в демо-режим (только просмотр)»** на странице входа — сервер сам ставит cookie с `ADMIN_DEMO_TOKEN` (токен не попадает в браузер) → бейдж «👁 Демо-режим · только просмотр», кнопка сохранения отключена, мутации → `403` на backend. Если `ADMIN_DEMO_TOKEN` не задан — кнопка показывает «Демо-вход отключён».
 
 После входа — sidebar-лэйаут (домстиль AIP Dark) с тремя консолями:
 
@@ -250,7 +261,45 @@ curl -s -o /dev/null -w "%{http_code}\n" -X POST http://localhost:8000/admin \
 > (HTML-поведение); в curl добавьте `&openai_enabled=on&gigachat_enabled=on` чтобы
 > включить оба провайдера в цепочку fallback.
 
-### 🖥️ 5.4. Панели observability (`/admin/executions`, `/admin/audit`)
+**Одно-кликовой демо-вход** (кнопка на странице `/admin/login`):
+
+```bash
+# POST /admin/login/demo → 303 на /admin, cookie admin_token=<ADMIN_DEMO_TOKEN>
+curl -s -o /dev/null -w "%{http_code} -> %{redirect_url}\n" -c /tmp/demo.txt \
+  -X POST http://localhost:8000/admin/login/demo
+# Мутация под demo-cookie → 403 (backend guard)
+curl -s -o /dev/null -w "%{http_code}\n" -b /tmp/demo.txt -X POST http://localhost:8000/admin \
+  -d "active_provider=openai&fallback_provider=gigachat&openai_model=x&openai_base_url=x&openai_temperature=0.3&openai_max_tokens=1&gigachat_model=x&gigachat_temperature=0.1&gigachat_max_tokens=1"
+```
+
+Ожидается: `303 -> .../admin`, затем `403`.
+
+### 🖥️ 5.4. Демо-лимиттер публичной формы (`POST /api/reviews`)
+
+Публичная форма отзыва ограничена токенизированной демо-сессией с квотой (см.
+`SECURITY_NOTES.md` §4). Каждый `POST /api/reviews` от пользователя списывает один
+запрос из квоты; воркер exempt по `X-Worker-Token`.
+
+```bash
+# 1) Старт демо-сессии → токен (X-Demo-Token)
+TOKEN=$(curl -s -X POST http://localhost:8000/api/demo/start \
+  -H 'Content-Type: application/json' -d '{}' | grep -oP '"token":"\K[^"]+')
+# 2) Квота: 5 публикаций проходят (201, заголовок X-Demo-Remaining 4→0), 6-я → 429
+for i in 1 2 3 4 5 6; do sleep 6; \
+  curl -s -o /dev/null -w "POST #$i -> %{http_code}\n" -X POST http://localhost:8000/api/reviews \
+  -H "Content-Type: application/json" -H "X-Demo-Token: $TOKEN" \
+  -d '{"name":"test","text":"quota test"}'; done
+# 3) Воркер-exempt: POST с X-Worker-Token → 201 даже при исчерпанной квоте
+curl -s -o /dev/null -w "%{http_code}\n" -X POST http://localhost:8000/api/reviews \
+  -H "Content-Type: application/json" -H "X-Worker-Token: <WORKER_API_TOKEN>" \
+  -d '{"name":"worker","text":"exempt"}'
+```
+
+Ожидается: `201`×5 + `429`, затем exempt `201`. UI сайта (`/`) показывает бейдж
+«Демо: осталось N из 5» и блокирует форму при `0`. `DEMO_ENABLED=false` отключает
+guard (только локальные тесты).
+
+### 🖥️ 5.5. Панели observability (`/admin/executions`, `/admin/audit`)
 
 В `/admin` есть две дополнительные read-only панели (доступны и admin-, и
 demo-токеном — только просмотр):
@@ -270,7 +319,7 @@ curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8000/admin/executions
 > 📌 События в `/admin/audit` появляются при входе в админку, смене конфига и
 > отказах авторизации. Просмотры самих панелей **не** создают audit-записей.
 
-### 🖥️ 5.5. Уровень логирования
+### 🖥️ 5.6. Уровень логирования
 
 `LOG_LEVEL` управляет stdout-логированием обоих сервисов. Для диагностики:
 
@@ -396,7 +445,7 @@ curl -i https://review-auto-responder.example.com/health    # → 200 {"status":
 - **TLS / публичный домен:** обратный прокси терминирует TLS; `/admin` — только через HTTPS.
 - **Секреты:** уникальные `WORKER_API_TOKEN`/`ADMIN_TOKEN`/`ADMIN_DEMO_TOKEN` (не демо-значения).
 - **GigaChat TLS:** `GIGACHAT_CA_BUNDLE` (Russian Trusted Root CA) вместо `ssl.CERT_NONE` — на production не отключайте проверку сертификата.
-- **Публичная форма:** `POST /api/reviews` открыт по дизайну (демо). Для публичного инстанса рассмотрите токенизацию/квоту запросов и RBAC на запись (отложено в v1.0).
+- **Публичная форма:** `POST /api/reviews` ограничен токенизированной демо-сессией с квотой (`DEMO_*`, см. §5.4 и `SECURITY_NOTES.md` §4). На публичном инстансе держите `DEMO_ENABLED=true`; подберите `DEMO_MAX_REQUESTS_PER_SESSION` под допустимый расход (1 POST = 1 LLM-генерация).
 - **БД:** резервное копирование `db-data` volume.
 - **Telegram:** заполните `TELEGRAM_BOT_TOKEN` + `TELEGRAM_USER_CHAT_ID` для уведомлений оператору.
 

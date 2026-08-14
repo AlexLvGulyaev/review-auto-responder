@@ -129,6 +129,28 @@
     button:hover { background: var(--accent-hover); }
     button:disabled { opacity: 0.7; cursor: wait; }
 
+    .demo-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 14px;
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #f7f9fc;
+      font-size: 12.5px;
+      color: var(--muted);
+      line-height: 1.35;
+    }
+    .demo-badge__dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--success); flex: 0 0 auto;
+    }
+    .demo-badge--low .demo-badge__dot { background: var(--pending); }
+    .demo-badge--empty .demo-badge__dot { background: var(--error); }
+    .demo-badge--empty { color: var(--error); }
+    .demo-badge[hidden] { display: none; }
+
     .message {
       min-height: 20px;
       font-size: 14px;
@@ -293,6 +315,10 @@
 
     <section class="layout">
       <div class="panel">
+        <div id="demo-badge" class="demo-badge" hidden>
+          <span class="demo-badge__dot"></span>
+          <span id="demo-badge__text">Демо-сессия…</span>
+        </div>
         <form id="review-form">
           <label>
             Имя (необязательно)
@@ -320,6 +346,102 @@
     const reviewForm = document.getElementById("review-form");
     const formMessage = document.getElementById("form-message");
     const submitButton = document.getElementById("submit-button");
+
+    // ── Демо-сессия: токенизированный лимиттер с квотой на публикации ──────
+    // Токен хранится в localStorage, передаётся заголовком X-Demo-Token на
+    // POST /api/reviews и GET /api/demo/status. Backend — единственный SOT квоты.
+    const DEMO_KEY = "review_demo_token";
+    const demoBadge = document.getElementById("demo-badge");
+    const demoBadgeText = document.getElementById("demo-badge__text");
+    let demoToken = localStorage.getItem(DEMO_KEY);
+    let demoLimit = 0;
+
+    function demoHeaders(extra) {
+      const h = Object.assign({}, extra || {});
+      if (demoToken) h["X-Demo-Token"] = demoToken;
+      return h;
+    }
+
+    function updateDemoBadge(remaining) {
+      if (!demoBadge) return;
+      demoBadge.hidden = false;
+      demoBadge.classList.remove("demo-badge--low", "demo-badge--empty");
+      if (remaining <= 0) {
+        demoBadge.classList.add("demo-badge--empty");
+        demoBadgeText.textContent = "Лимит демо-сессии исчерпан. Обновите страницу для новой сессии.";
+        if (submitButton) submitButton.disabled = true;
+        return;
+      }
+      if (remaining <= 2) demoBadge.classList.add("demo-badge--low");
+      demoBadgeText.textContent = "Демо: осталось " + remaining + " из " + demoLimit;
+    }
+
+    function setDemoBadgeError(text) {
+      if (!demoBadge) return;
+      demoBadge.hidden = false;
+      demoBadge.classList.remove("demo-badge--low");
+      demoBadge.classList.add("demo-badge--empty");
+      demoBadgeText.textContent = text;
+      if (submitButton) submitButton.disabled = true;
+    }
+
+    async function startDemoSession() {
+      try {
+        const resp = await fetch("/api/demo/start", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: "{}"
+        });
+        if (!resp.ok) { demoBadge.hidden = true; return null; }
+        const data = await resp.json();
+        demoToken = data.token;
+        demoLimit = data.requests_limit;
+        localStorage.setItem(DEMO_KEY, demoToken);
+        return data;
+      } catch (_) {
+        demoBadge.hidden = true;
+        return null;
+      }
+    }
+
+    async function ensureDemoSession() {
+      if (!demoToken) await startDemoSession();
+      if (!demoToken) return;
+      try {
+        const resp = await fetch("/api/demo/status", { headers: demoHeaders() });
+        if (resp.status === 401 || resp.status === 404) {
+          localStorage.removeItem(DEMO_KEY);
+          demoToken = null;
+          await startDemoSession();
+        } else if (resp.ok) {
+          const data = await resp.json();
+          demoLimit = data.requests_limit;
+          updateDemoBadge(data.requests_remaining);
+          return;
+        }
+      } catch (_) { /* сеть — статус обновится после первого POST */ }
+      if (demoToken && demoLimit) updateDemoBadge(demoLimit);
+    }
+
+    // Обработка demo-ошибок POST /api/reviews. Бросает Error для demo-статусов
+    // (401/403/429) с русским текстом и обновляет бейдж; возвращает false для
+    // прочих статусов (тогда вызывающий показывает default-сообщение).
+    async function handleDemoError(response) {
+      const st = response.status;
+      if (st !== 401 && st !== 403 && st !== 429) return false;
+      const errorData = await response.json().catch(() => ({}));
+      const detail = (typeof errorData.detail === "string" ? errorData.detail : "").toLowerCase();
+      if (st === 401) {
+        setDemoBadgeError("Демо-сессия истекла. Обновите страницу, чтобы начать новую.");
+        throw new Error("Демо-сессия истекла. Обновите страницу, чтобы начать новую.");
+      }
+      if (st === 429) {
+        if (detail.includes("rate")) throw new Error("Подождите несколько секунд перед следующим отзывом.");
+        setDemoBadgeError("Лимит демо-сессии исчерпан. Обновите страницу для новой сессии.");
+        throw new Error("Лимит демо-сессии исчерпан. Обновите страницу для новой сессии.");
+      }
+      throw new Error("Демо-сессия недоступна. Обновите страницу, чтобы начать новую.");
+    }
 
     function escapeHtml(value) {
       return String(value)
@@ -460,7 +582,7 @@
       try {
         const response = await fetch("/api/reviews", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: demoHeaders({ "Content-Type": "application/json" }),
           body: JSON.stringify({
             parent_id: parentId,
             name: nameInput.value,
@@ -469,10 +591,14 @@
         });
 
         if (!response.ok) {
+          await handleDemoError(response); // бросает для demo-статусов, иначе false
           const errorData = await response.json().catch(() => ({}));
           const detail = errorData.detail || "Не удалось сохранить комментарий.";
           throw new Error(typeof detail === "string" ? detail : "Не удалось сохранить комментарий.");
         }
+
+        const remaining = response.headers.get("X-Demo-Remaining");
+        if (remaining !== null) updateDemoBadge(Number(remaining));
 
         replyForm.reset();
         message.textContent = "Комментарий добавлен.";
@@ -507,15 +633,19 @@
       try {
         const response = await fetch("/api/reviews", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: demoHeaders({ "Content-Type": "application/json" }),
           body: JSON.stringify(payload)
         });
 
         if (!response.ok) {
+          await handleDemoError(response); // бросает для demo-статусов, иначе false
           const errorData = await response.json().catch(() => ({}));
           const detail = errorData.detail || "Не удалось сохранить отзыв.";
           throw new Error(typeof detail === "string" ? detail : "Не удалось сохранить отзыв.");
         }
+
+        const remaining = response.headers.get("X-Demo-Remaining");
+        if (remaining !== null) updateDemoBadge(Number(remaining));
 
         reviewForm.reset();
         formMessage.textContent = "Отзыв сохранен.";
@@ -529,6 +659,7 @@
       }
     });
 
+    ensureDemoSession();
     loadReviews();
     setInterval(loadReviews, 5000);
   </script>

@@ -323,6 +323,46 @@ async def admin_logout():
     return response
 
 
+@router.post("/login/demo")
+async def admin_login_demo(
+    request: Request,
+    db: AsyncSession = Depends(get_db_session),
+):
+    """Одно-кликовой демо-вход (только просмотр).
+
+    Сервер сам подставляет ADMIN_DEMO_TOKEN и ставит cookie — токен НЕ попадает
+    в браузер (строго лучше подхода с запеканием demo-токена в статический
+    бандл/страницу). Аудит login_success с role=demo и entry="demo_button"
+    отличим от входа по токену.
+    """
+    if not settings.admin_demo_token:
+        return RedirectResponse(
+            url="/admin/login?error=demo_unavailable",
+            status_code=status.HTTP_303_SEE_OTHER,
+        )
+    identity = _identity_from_token(settings.admin_demo_token)  # role=demo
+    await AuditService(db).log_audit(
+        action="admin.login_success",
+        resource_type="admin_session",
+        user_id=identity.user_id,
+        user_name=identity.user_name,
+        user_role=identity.user_role,
+        ip_address=client_ip(request),
+        details={"entry": "demo_button"},
+    )
+    response = RedirectResponse(url="/admin", status_code=status.HTTP_303_SEE_OTHER)
+    response.set_cookie(
+        key=COOKIE_NAME,
+        value=settings.admin_demo_token,
+        httponly=True,
+        samesite="lax",
+        secure=False,  # demo; за reverse-proxy с TLS можно выставить secure
+        max_age=60 * 60 * 8,  # 8 часов — как вход по токену
+    )
+    logger.info("Admin demo login: user_id=%s role=%s", identity.user_id, identity.user_role)
+    return response
+
+
 @router.post("")
 async def admin_save(
     request: Request,
