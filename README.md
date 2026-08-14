@@ -113,15 +113,27 @@ docker compose up -d --build
 
 ## 📚 7. Документация
 
+**Пользование и демо:**
 - [📖 `docs/USER_GUIDE.md`](docs/USER_GUIDE.md) — как пользоваться сайтом отзывов.
 - [🎬 `docs/SYSTEM_DEMO.md`](docs/SYSTEM_DEMO.md) — скриншот-тур по системе.
+- [🎬 `docs/E2E_SCENARIOS.md`](docs/E2E_SCENARIOS.md) — сквозные демо-сценарии (сайт + `/admin` + Telegram).
+- [🎛️ `docs/OPERATOR_GUIDE.md`](docs/OPERATOR_GUIDE.md) — руководство оператора `/admin` (runtime-config, промпт, observability).
+- [💼 `docs/BUSINESS_VALUE.md`](docs/BUSINESS_VALUE.md) — ценность, целевая аудитория, паттерн «сбор + AI-реакция 24/7».
+
+**Техническая:**
 - [🏗️ `docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — архитектура и путь данных.
 - [📋 `docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) — технический план.
 - [🔌 `docs/API_CONTRACT.md`](docs/API_CONTRACT.md) — контракты HTTP API.
+- [📝 `docs/PROMPT_ARCHITECTURE.md`](docs/PROMPT_ARCHITECTURE.md) — архитектура промпта (файл-SOT, lifecycle, аудит).
 - [🤖 `docs/EXTERNAL_PROVIDERS.md`](docs/EXTERNAL_PROVIDERS.md) — параметры LLM-провайдеров.
-- [🛡️ `docs/SECURITY_NOTES.md`](docs/SECURITY_NOTES.md) — безопасность и демо-RBAC.
-- [🚀 `docs/DEPLOYMENT_GUIDE.md`](docs/DEPLOYMENT_GUIDE.md) — развёртывание с нуля.
-- [✅ `docs/DEPLOYMENT_VALIDATION_REPORT.md`](docs/DEPLOYMENT_VALIDATION_REPORT.md) — отчёт воспроизводимости.
+- [🛡️ `docs/SECURITY_NOTES.md`](docs/SECURITY_NOTES.md) — безопасность, демо-RBAC и демо-лимиттер.
+
+**Развёртывание и проверка:**
+- [🚀 `docs/DEPLOYMENT_GUIDE.md`](docs/DEPLOYMENT_GUIDE.md) — развёртывание с нуля (SOT воспроизводимости).
+- [✅ `docs/DEPLOYMENT_VALIDATION_REPORT.md`](docs/DEPLOYMENT_VALIDATION_REPORT.md) — отчёт воспроизводимости в чистом окружении.
+- [🧪 `docs/TESTING.md`](docs/TESTING.md) — стратегия тестирования (4 уровня проверки).
+- [📊 `docs/PROJECT_STATE.md`](docs/PROJECT_STATE.md) — паспорт состояния проекта.
+- [📋 `docs/SPEC.md`](docs/SPEC.md) — продуктовая спецификация (замороженный baseline).
 
 ---
 
