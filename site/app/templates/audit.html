@@ -82,8 +82,18 @@
           <option value="7d" {{ 'selected' if filters.period == '7d' }}>7д</option>
           <option value="30d" {{ 'selected' if filters.period == '30d' }}>30д</option>
         </select>
-        <input class="ai-input" type="text" name="action" value="{{ filters.action or '' }}" placeholder="action" onkeydown="if(event.key==='Enter'){event.preventDefault();this.form.submit();}">
-        <input class="ai-input" type="text" name="resource_type" value="{{ filters.resource_type or '' }}" placeholder="resource_type" onkeydown="if(event.key==='Enter'){event.preventDefault();this.form.submit();}">
+        <select class="ai-select" name="action" onchange="this.form.submit()">
+          <option value="" {{ 'selected' if not filters.action }}>действие: любое</option>
+          {% for a in actions %}
+          <option value="{{ a }}" {{ 'selected' if filters.action == a }}>{{ a }}</option>
+          {% endfor %}
+        </select>
+        <select class="ai-select" name="resource_type" onchange="this.form.submit()">
+          <option value="" {{ 'selected' if not filters.resource_type }}>ресурс: любой</option>
+          {% for rt in resource_types %}
+          <option value="{{ rt }}" {{ 'selected' if filters.resource_type == rt }}>{{ rt }}</option>
+          {% endfor %}
+        </select>
       </div>
       <input class="ai-input ai-search" type="text" name="user_id" value="{{ filters.user_id or '' }}" placeholder="Поиск по user_id или user_name..." onkeydown="if(event.key==='Enter'){event.preventDefault();this.form.submit();}">
     </form>

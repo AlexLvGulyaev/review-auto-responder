@@ -34,6 +34,23 @@ _PERIOD_DELTAS = {
     "30d": timedelta(days=30),
 }
 
+# Замкнутые словари значений для фильтров-селектов (SOT; совпадает с
+# классификацией action_badge в шаблоне и с вызовами AuditService.log_audit).
+AUDIT_ACTIONS = [
+    "admin.login_success",
+    "admin.login_failed",
+    "admin.rbac_denied",
+    "admin.config_update",
+    "admin.provider_test",
+    "auth.worker_denied",
+]
+AUDIT_RESOURCE_TYPES = [
+    "admin_session",
+    "runtime_config",
+    "provider",
+    "worker_api",
+]
+
 
 @router.get("", response_class=HTMLResponse)
 async def list_audit(
@@ -92,6 +109,8 @@ async def list_audit(
             "limit": limit,
             "offset": offset,
             "selected_id": selected_id,
+            "actions": AUDIT_ACTIONS,
+            "resource_types": AUDIT_RESOURCE_TYPES,
             "filters": {
                 "period": period,
                 "action": action,
