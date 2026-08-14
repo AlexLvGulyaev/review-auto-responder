@@ -59,67 +59,52 @@ flowchart TB
 
 ```mermaid
 flowchart TB
-    subgraph "Review Auto Responder"
-        subgraph "review-site — FastAPI"
-            Routes["Routes<br/>reviews · demo · executions · audit"]
-            Admin["Консоль /admin<br/>runtime-config · промпт · состояние"]
-            DemoLimiter["DemoLimiterService<br/>токенизированная квота POST /api/reviews"]
-            Audit["AuditService<br/>журнал аудита"]
-        end
-
-        subgraph "review-worker — asyncio"
-            Poller["Poller<br/>цикл WORKER_POLL_INTERVAL"]
-            Processor["Processor<br/>detect_tone · generate_response · fallback"]
-            Client["httpx-клиент<br/>→ API сайта"]
-            Providers["Providers<br/>openai / gigachat / factory"]
-            Prompt["PromptLoader<br/>system_prompt.md + mtime-кеш"]
-            Runtime["RuntimeConfig<br/>config.json + mtime-кеш"]
-            WorkerAPI["test-API<br/>POST /provider-test (внутренний)"]
-        end
-
-        subgraph "shared volume runtime-config"
-            Config[("config.json<br/>runtime-параметры")]
-            PromptFile[("system_prompt.md<br/>промпт-файл-SOT")]
-            Status[("status.json<br/>liveness + флаги провайдеров")]
-        end
+    subgraph Site["review-site — FastAPI"]
+        Routes["Routes<br/>reviews · demo · executions · audit"]
+        Admin["Консоль /admin"]
+        DemoLimiter["DemoLimiter<br/>квота формы"]
+        Audit["AuditService"]
     end
 
-    DB[("PostgreSQL 16<br/>reviews · execution_* · audit_logs · demo_sessions")]
-    LLM[LLM-провайдер]
-    TG[Telegram]
+    subgraph Worker["review-worker — asyncio"]
+        Poller["Poller<br/>цикл опроса"]
+        Processor["Processor<br/>tone · LLM · fallback"]
+        Client["httpx-клиент"]
+        Providers["Providers<br/>openai · gigachat"]
+        WorkerAPI["test-API<br/>/provider-test"]
+    end
 
-    Routes --> DB
-    Admin -->|"пишет config + промпт"| Config
-    Admin -->|"пишет промпт"| PromptFile
-    Admin -->|"читает status"| Status
+    Vol[("shared volume runtime-config<br/>config.json · system_prompt.md · status.json")]
+    DB[("PostgreSQL 16")]
+    LLM["LLM-провайдер"]
+    TG["Telegram"]
+
+    Routes <--> DB
     DemoLimiter --> DB
     Audit --> DB
-
-    Poller -->|"GET /api/reviews?status=new"| Client
+    Admin <--> Vol
+    Poller <--> Vol
+    Poller --> Processor
+    Processor --> Client
     Processor --> Providers
-    Processor --> Prompt
-    Processor --> Runtime
-    Providers -->|"Chat Completions"| LLM
-    Client -->|"POST /api/reviews · PATCH · /api/executions"| Routes
-    Processor -.->|"send_message"| TG
-    Poller -->|"пишет liveness + флаги"| Status
-    Poller -->|"читает config + промпт"| Config
-    Poller -->|"читает промпт"| PromptFile
+    Providers --> LLM
+    Client <--> Routes
+    Processor -.-> TG
+    Admin --> WorkerAPI
     WorkerAPI --> Providers
-    Admin -->|"прокси POST /admin/test-provider"| WorkerAPI
 ```
 
-- **`review-site`** — первичный SOT: хранит отзывы, рендерит публичный UI и `/admin`,
-  держит демо-лимиттер и аудит. Не имеет LLM-ключей.
-- **`review-worker`** — автономный поллер: опрашивает только `status=new`,
-  классифицирует тон, генерирует ответ, пишет ответ обратно как дочерний комментарий,
-  уведомляет в Telegram. LLM-ключи живут **только** на воркере.
-- **shared volume `runtime-config`** — мост между сайтом и воркером: `/admin` пишет
-  `config.json` + `system_prompt.md`, воркер пишет `status.json` и читает config/промпт
-  по mtime. HTTP-вызова между ними для конфига нет.
-- **`worker/api.py`** — внутренний test-HTTP-сервер (порт `WORKER_API_PORT`, **не
-  публикуется на хост**) для кнопки «Проверить»; защищён `X-Worker-Token`. Ключи не
-  покидают воркер.
+- **`review-site`** — первичный SOT: хранит отзывы, публичный UI, `/admin`, демо-лимиттер,
+  аудит. LLM-ключей нет.
+- **`review-worker`** — автономный поллер: опрашивает только `status=new`; processor
+  определяет тон (словарь), генерирует ответ (LLM active→fallback), пишет ответ обратно
+  как дочерний комментарий, уведомляет в Telegram. Ключи живут **только** на воркере.
+- **shared volume** — мост сайт↔воркер без HTTP: `/admin` **пишет** `config.json` +
+  `system_prompt.md` и **читает** `status.json`; воркер **читает** config/промпт по mtime
+  и **пишет** `status.json` (liveness + bool-флаги провайдеров, без секретов).
+- **test-API** (`worker/api.py`) — внутренний порт `WORKER_API_PORT` (**не публикуется на
+  хост**), `POST /provider-test` защищён `X-Worker-Token`; кнопка «Проверить» идёт через
+  site-proxy `/admin/test-provider` — ключи не покидают воркер.
 
 ---
 
@@ -242,9 +227,9 @@ flowchart TD
     P -->|ответ + meta| W
     W -->|POST /api/reviews parent_id X-Worker-Token exempt| S
     S -->|insert ответ status=new| DB
-    W -->|PATCH /api/reviews/{id} X-Worker-Token status=processed| S
+    W -->|"PATCH /api/reviews/{id} · X-Worker-Token · status=processed"| S
     W -->|PATCH ответа status=processed| S
-    W -->|PATCH /api/executions/{id} finish + steps| S
+    W -->|"PATCH /api/executions/{id} · finish + steps"| S
     S -->|execution_session ok/error + steps| DB
     W -->|status.json shared volume| SV2[(/data/runtime/status.json)]
     S -->|reads status.json + config.json + system_prompt.md| SV[(shared volume runtime-config)]

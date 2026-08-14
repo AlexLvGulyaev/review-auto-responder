@@ -30,7 +30,7 @@ flowchart TD
         W -->|heartbeat| HB["data/heartbeat.json"]
         W -->|execution-tracing| EX["POST/PATCH /api/executions · API сайта"]
     end
-    CL -->|PATCH /api/reviews/{id} + X-Worker-Token| API
+    CL -->|"PATCH /api/reviews/{id} + X-Worker-Token"| API
     CL -->|POST /api/reviews · дочерний ответ| API
     PRV -.fallback.-> PR
 ```
