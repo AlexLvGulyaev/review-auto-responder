@@ -6,120 +6,225 @@
 
 ---
 
-## 🎯 1. Назначение
+## 🎯 1. Архитектурные принципы
 
-Двухсервисная система автономного ответа на отзывы:
-
-- **review-site** — FastAPI + PostgreSQL: публичный сайт отзывов, хранилище, операторская панель `/admin`.
-- **review-worker** — асинхронный поллер: опрашивает сайт, определяет тон, генерирует ответ через LLM-провайдер, пишет ответ обратно, уведомляет оператора в Telegram.
-
-Архитектура намеренно разделяет **хранение/UX** (сайт) и **автономную обработку** (воркер). Сайт — первичный Source of Truth статуса отзыва (`new`/`processed`); локальный `state.json` воркера — вторичный идемпотентный guard.
-
----
-
-## 🧩 2. Компоненты
-
-| Компонент | Технология | Ответственность |
-|-----------|-----------|----------------|
-| `review-site` | FastAPI, SQLAlchemy 2 (async), asyncpg, Jinja2 | Хранение отзывов, публичный UI, `/admin` runtime-config + консоль состояния, демо-лимиттер (квота `POST /api/reviews`), `/health` |
-| `review-worker` | asyncio, httpx, openai SDK, urllib (GigaChat) | Опрос, классификация тона, генерация ответа, write-back, Telegram |
-| `db` | PostgreSQL 16 | Хранилище отзывов (самоссылающаяся модель `Review`) |
-| `runtime-config` (volume) | shared volume: `config.json` + `system_prompt.md` + `status.json` | Runtime-параметры (`config.json`), промпт-файл-SOT (`system_prompt.md`), status-снапшот воркера (`status.json`); `/admin` пишет config+промпт, воркер пишет status, оба читают по mtime/файлу |
+| Принцип | Суть |
+|---------|------|
+| **Разделение хранения и обработки** | `review-site` (FastAPI + PostgreSQL) — хранение, UX, `/admin`; `review-worker` (asyncio) — автономная обработка. Сайт не знает про LLM, воркер не имеет БД-сессии. |
+| **Сайт — первичный SOT статуса** | `reviews.status` (`new`/`processed`) — истина; локальный `state.json` воркера — вторичный идемпотентный guard на окно «обработал, но сайт ещё не подтвердил». |
+| **Секреты отдельно от runtime** | API-ключи — только `.env` (рестарт); операторские параметры и промпт — `config.json`/`system_prompt.md` на shared volume (без рестарта). Ключи никогда не попадают в `/admin`/браузер/config.json. |
+| **Fallback-by-design** | active LLM → fallback LLM → словарные шаблоны по тону. Система отвечает даже без LLM-ключей. |
+| **Observability — три контура** | stdout-логи · execution-трейсы (БД) · журнал аудита (БД). Каждый со своим носителем и зоной. |
+| **Hot-reload по mtime** | `config.json` и `system_prompt.md` кешируются по `st_mtime`; смена провайдера/модели/промпта через `/admin` применяется на следующем цикле опроса без рестарта. |
 
 ---
 
-## 🗂️ 3. Модель данных
+## 🌐 2. Context Diagram (C4 Level 1)
 
-### 🗂️ 3.1. Таблица `reviews`
+Система в окружении — кто с ней взаимодействует и какие внешние системы задействованы.
 
-| Поле | Тип | Назначение |
-|------|-----|-----------|
-| `id` | int PK | Идентификатор |
-| `parent_id` | int FK → `reviews.id` | Самоссылка: дочерний комментарий (ответ) на родительский отзыв |
-| `name` | str \| null | Имя автора (`AI_AUTHOR_NAME` для авто-ответов) |
-| `text` | text | Текст отзыва/ответа |
-| `status` | enum `new`/`processed` | **Первичный SOT** — обработан ли отзыв |
-| `response` | str \| null | Зарезервировано (ответ публикуется дочерним комментарием) |
-| `tone` | enum `positive`/`negative`/`neutral` \| null | Тональность (определяет воркер) |
-| `created_at` | datetime | Время создания |
+```mermaid
+flowchart TB
+    subgraph "Внешние пользователи"
+        Visitor[Посетитель сайта]
+        Operator[Оператор поддержки]
+    end
 
-Threaded-структура: ответ воркера — это строка `reviews` с `parent_id = <id отзыва>`, `name = AI_AUTHOR_NAME`. Это сохраняет дерево комментариев сайта.
+    RAR["Review Auto Responder<br/>автономный AI-ответчик отзывов"]
 
-### 🗂️ 3.2. Локальный state воркера (`state.json`)
+    subgraph "Внешние системы"
+        LLM[LLM-провайдер<br/>OpenAI / GigaChat]
+        TG[Telegram Bot API]
+    end
 
-| Поле | Назначение |
-|------|-----------|
-| `notified_review_ids` | Отзывы, по которым уже отправлено Telegram-уведомление (предотвращает дубль, пока отзыв ещё `new`) |
-| `processed_review_ids` | Defensive-проверка перед дорогой `generate_response` + `create_review` (окно до смены статуса на сайте) |
+    Visitor -->|"HTTP — оставить отзыв, прочитать тред"| RAR
+    Operator -->|"HTTP — /admin (runtime-config, observability)"| RAR
+    Operator -.->|"получает уведомления"| TG
+    RAR -->|"Chat Completions — генерация ответа"| LLM
+    RAR -->|"send_message — уведомление о новом отзыве"| TG
+```
 
-> 📌 **SOT-дисциплина:** статус на сайте — первичный. `state.json` покрывает только окно «воркер уже обработал, но сайт ещё не подтвердил `processed`» и идемпотентность при рестартах.
+- **Посетитель** — анонимный, без регистрации; оставляет отзыв и видит автономный
+  AI-ответ в треде.
+- **Оператор** — входит в `/admin` (полный токен или демо-режим) и параллельно
+  получает Telegram-уведомления о негативе.
+- **LLM** — OpenAI или GigaChat через единую абстракцию Chat Completions.
+- **Telegram** — опциональный канал уведомления оператора.
 
-### 🗂️ 3.3. Таблица `execution_sessions` (контур 2 — execution tracing)
+---
 
-| Поле | Тип | Назначение |
-|------|-----|-----------|
-| `id` | int PK | Идентификатор сессии обработки |
-| `review_id` | int FK → `reviews.id` (SET NULL) | Обрабатываемый отзыв |
-| `status` | `started`/`ok`/`error` | Статус обработки |
-| `route` | str | Маршрут (`review_processing`) |
-| `provider_key` | str \| null | LLM-провайдер (`gigachat`/`openai`/`fallback`/...) |
-| `model_name` | str \| null | Имя модели |
-| `duration_ms` | int \| null | Длительность всей обработки |
-| `started_at` / `finished_at` | datetime | Время старта/финала |
-| `execution_metadata` | JSONB | Метаданные сессии (напр. `reply_id`, `error`) |
+## 📦 3. Container Diagram (C4 Level 2)
 
-### 🗂️ 3.4. Таблица `execution_steps` (стадии пайплайна)
+Внутреннее устройство: два сервиса, БД, shared volume и их связи.
 
-| Поле | Тип | Назначение |
-|------|-----|-----------|
-| `id` | int PK | Идентификатор шага |
-| `execution_session_id` | int FK → `execution_sessions.id` (CASCADE) | Родительская сессия |
-| `stage_name` | str | `detect_tone`/`telegram`/`llm_call`/`persist_reply`/`mark_processed` |
-| `step_order` | int | Порядок шага |
-| `status` | `ok`/`error`/`skipped` | Статус шага |
-| `started_at` / `finished_at` | datetime \| null | Тайминг шага |
-| `duration_ms` | int \| null | Длительность шага |
-| `step_metadata` | JSONB | Для `llm_call`: `{provider, model, latency_ms, tokens, fallback_reason}` |
+```mermaid
+flowchart TB
+    subgraph "Review Auto Responder"
+        subgraph "review-site — FastAPI"
+            Routes["Routes<br/>reviews · demo · executions · audit"]
+            Admin["Консоль /admin<br/>runtime-config · промпт · состояние"]
+            DemoLimiter["DemoLimiterService<br/>токенизированная квота POST /api/reviews"]
+            Audit["AuditService<br/>журнал аудита"]
+        end
 
-### 🗂️ 3.5. Таблица `audit_logs` (контур 3 — audit)
+        subgraph "review-worker — asyncio"
+            Poller["Poller<br/>цикл WORKER_POLL_INTERVAL"]
+            Processor["Processor<br/>detect_tone · generate_response · fallback"]
+            Client["httpx-клиент<br/>→ API сайта"]
+            Providers["Providers<br/>openai / gigachat / factory"]
+            Prompt["PromptLoader<br/>system_prompt.md + mtime-кеш"]
+            Runtime["RuntimeConfig<br/>config.json + mtime-кеш"]
+            WorkerAPI["test-API<br/>POST /provider-test (внутренний)"]
+        end
 
-| Поле | Тип | Назначение |
-|------|-----|-----------|
-| `id` | int PK | Идентификатор записи |
-| `user_id` / `user_name` / `user_role` | str \| null | Кто совершил действие |
-| `action` | str | Тип события (`admin.config_update`, `auth.worker_denied`, ...) |
-| `resource_type` / `resource_id` | str \| null | Над чем совершено |
-| `ip_address` | str \| null | Откуда (`X-Forwarded-For` → `X-Real-IP` → `client.host`) |
-| `details` | JSONB | Контекст (без секретов и полных промптов) |
-| `created_at` | datetime | Время события |
+        subgraph "shared volume runtime-config"
+            Config[("config.json<br/>runtime-параметры")]
+            PromptFile[("system_prompt.md<br/>промпт-файл-SOT")]
+            Status[("status.json<br/>liveness + флаги провайдеров")]
+        end
+    end
 
-### 🗂️ 3.6. Таблица `demo_sessions` (v1.5 — токенизированная демо-квота)
+    DB[("PostgreSQL 16<br/>reviews · execution_* · audit_logs · demo_sessions")]
+    LLM[LLM-провайдер]
+    TG[Telegram]
 
-| Поле | Тип | Назначение |
-|------|-----|-----------|
-| `id` | int PK | Идентификатор сессии |
-| `token` | str unique | `X-Demo-Token` (выдаётся `POST /api/demo/start`, хранится в localStorage посетителя) |
-| `session_id` | str \| null | Идентификатор сессии (для корреляции) |
-| `client_ip` | str \| null | IP посетителя (для лимита sessions/IP/час) |
-| `requests_used` | int | Израсходовано запросов (инкремент при каждом `POST /api/reviews`) |
-| `requests_limit` | int (default 5) | Квота на сессию (`DEMO_MAX_REQUESTS_PER_SESSION`) |
-| `is_active` | bool (default true) | Активна ли сессия |
-| `created_at` | datetime | Время создания |
-| `expires_at` | datetime | Срок жизни (`DEMO_SESSION_TTL_MINUTES`, default 30) |
-| `last_request_at` | datetime \| null | Время последнего запроса (для rate-limit `DEMO_RATE_LIMIT_PER_MINUTE`) |
+    Routes --> DB
+    Admin -->|"пишет config + промпт"| Config
+    Admin -->|"пишет промпт"| PromptFile
+    Admin -->|"читает status"| Status
+    DemoLimiter --> DB
+    Audit --> DB
 
-> 📌 Воркер exempt от демо-квоты — аутентифицируется `X-Worker-Token`, не
+    Poller -->|"GET /api/reviews?status=new"| Client
+    Processor --> Providers
+    Processor --> Prompt
+    Processor --> Runtime
+    Providers -->|"Chat Completions"| LLM
+    Client -->|"POST /api/reviews · PATCH · /api/executions"| Routes
+    Processor -.->|"send_message"| TG
+    Poller -->|"пишет liveness + флаги"| Status
+    Poller -->|"читает config + промпт"| Config
+    Poller -->|"читает промпт"| PromptFile
+    WorkerAPI --> Providers
+    Admin -->|"прокси POST /admin/test-provider"| WorkerAPI
+```
+
+- **`review-site`** — первичный SOT: хранит отзывы, рендерит публичный UI и `/admin`,
+  держит демо-лимиттер и аудит. Не имеет LLM-ключей.
+- **`review-worker`** — автономный поллер: опрашивает только `status=new`,
+  классифицирует тон, генерирует ответ, пишет ответ обратно как дочерний комментарий,
+  уведомляет в Telegram. LLM-ключи живут **только** на воркере.
+- **shared volume `runtime-config`** — мост между сайтом и воркером: `/admin` пишет
+  `config.json` + `system_prompt.md`, воркер пишет `status.json` и читает config/промпт
+  по mtime. HTTP-вызова между ними для конфига нет.
+- **`worker/api.py`** — внутренний test-HTTP-сервер (порт `WORKER_API_PORT`, **не
+  публикуется на хост**) для кнопки «Проверить»; защищён `X-Worker-Token`. Ключи не
+  покидают воркер.
+
+---
+
+## 🗂️ 4. Модель данных
+
+Пять таблиц PostgreSQL (создаются `Base.metadata.create_all` в lifespan сайта,
+Alembic не используется — idempotent для существующей БД демо) + локальный state воркера.
+
+```mermaid
+erDiagram
+    reviews {
+        int id PK
+        int parent_id FK
+        text name
+        text text
+        text status
+        text response
+        text tone
+        datetime created_at
+    }
+    execution_sessions {
+        int id PK
+        int review_id FK
+        text status
+        text route
+        text provider_key
+        text model_name
+        int duration_ms
+        datetime started_at
+        datetime finished_at
+        jsonb execution_metadata
+    }
+    execution_steps {
+        int id PK
+        int execution_session_id FK
+        text stage_name
+        int step_order
+        text status
+        int duration_ms
+        jsonb step_metadata
+    }
+    audit_logs {
+        int id PK
+        text user_id
+        text user_name
+        text user_role
+        text action
+        text resource_type
+        text resource_id
+        text ip_address
+        jsonb details
+        datetime created_at
+    }
+    demo_sessions {
+        int id PK
+        text token
+        text session_id
+        text client_ip
+        int requests_used
+        int requests_limit
+        bool is_active
+        datetime created_at
+        datetime expires_at
+        datetime last_request_at
+    }
+
+    reviews ||--o{ reviews : "parent_id (self-ref, threaded)"
+    execution_sessions }o--o| reviews : "review_id (SET NULL)"
+    execution_steps }o--|| execution_sessions : "session_id (CASCADE)"
+```
+
+**Ключевые факты модели:**
+
+- **`reviews` — threaded-структура.** Ответ воркера — это строка `reviews` с
+  `parent_id = <id отзыва>`, `name = AI_AUTHOR_NAME`, `status = new` (дочерний
+  комментарий). Дерево комментариев сайта сохраняется. `status` — **первичный SOT**
+  обработанности; `tone` — `positive`/`negative`/`neutral` (определяет воркер).
+- **`execution_sessions` / `execution_steps`** — контур execution-tracing. Двухфазная
+  запись: `POST /api/executions` (start, `status=started`) → сбор шагов в памяти с
+  `perf_counter`-таймингом → `PATCH /api/executions/{id}` (finish, шаги одним пакетом).
+  Для `llm_call` `step_metadata` несёт `{provider, model, latency_ms, tokens, fallback_reason}`.
+  При падении воркера остаётся `started`-сессия (диагностический признак зависшей обработки).
+- **`audit_logs`** — контур аудита: кто/что/когда/откуда. `details` (JSONB) **без секретов
+  и полных промптов** (только `prompt_len`, `prompt_changed`, `changed_keys`).
+- **`demo_sessions` (v1.5)** — токенизированная демо-квота публичной формы. `token`
+  выдаётся `POST /api/demo/start`, передаётся заголовком `X-Demo-Token`, хранится в
+  `localStorage` посетителя. `requests_limit` = `DEMO_MAX_REQUESTS_PER_SESSION` (5);
+  `expires_at` = `DEMO_SESSION_TTL_MINUTES` (30). Backend — единственный SOT квоты
+  (UI лишь отображает).
+
+> 📌 **Воркер exempt от демо-квоты** — аутентифицируется `X-Worker-Token`, не
 > `X-Demo-Token` (создаёт AI-ответ через тот же `POST /api/reviews`). Guard
 > `require_demo_or_worker` в `routes.py` допускает любой из двух токенов.
 
-> 📌 Таблицы observability и `demo_sessions` создаются `Base.metadata.create_all`
-> в lifespan сайта (Alembic не используется — idempotent для существующей БД демо).
+> 📌 **Локальный state воркера (`state.json`, не в БД):** `notified_review_ids` (анти-дубль
+> Telegram, пока отзыв ещё `new`) + `processed_review_ids` (defensive-проверка перед
+> дорогой `generate_response`). SOT-дисциплина: статус на сайте первичен, `state.json`
+> покрывает только окно рассинхрона и идемпотентность при рестартах. Также воркер пишет
+> `heartbeat.json` (Docker healthcheck).
 
 ---
 
-## 🔀 4. Путь данных (data flow)
+## 🔀 5. Путь данных (data flow)
 
-### 🔀 4.1. Схема
+### 🔀 5.1. Поток данных — общая схема
 
 ```mermaid
 flowchart TD
@@ -141,18 +246,61 @@ flowchart TD
     W -->|PATCH ответа status=processed| S
     W -->|PATCH /api/executions/{id} finish + steps| S
     S -->|execution_session ok/error + steps| DB
-    W -->|state.json| ST[(state.json)]
-    W -->|heartbeat.json| H[(heartbeat.json)]
     W -->|status.json shared volume| SV2[(/data/runtime/status.json)]
     S -->|reads status.json + config.json + system_prompt.md| SV[(shared volume runtime-config)]
 ```
 
-> 🖼️ **Результат data-flow на публичном сайте:**
+> 🖼️ **Результат на публичном сайте:**
 > ![Отзыв опубликован в треде, воркер сгенерировал ответ AI Support, демо-бейдж квоты уменьшился](screenshots/RAR_site_review_posted.png)
 >
 > Клиент оставил отзыв → воркер автономно определил тон, сгенерировал ответ через
-> GigaChat и опубликовал его как дочерний комментарий в треде. Демо-бейдж квоты
-> уменьшился (воркер exempt от квоты по `X-Worker-Token`).
+> GigaChat и опубликовал его как дочерний комментарий. Демо-бейдж квоты уменьшился
+> (воркер exempt от квоты по `X-Worker-Token`).
+
+### 🔀 5.2. Последовательность обработки одного отзыва
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Клиент
+    participant S as review-site
+    participant W as review-worker
+    participant DB as PostgreSQL
+    participant LLM as LLM-провайдер
+    participant TG as Telegram
+
+    C->>S: POST /api/reviews (X-Demo-Token)
+    S->>DB: insert review status=new
+    W->>S: GET /api/reviews?status=new (цикл опроса)
+    S-->>W: [новые отзывы]
+    W->>S: POST /api/executions (X-Worker-Token) — start
+    W->>W: self-reply guard (name == AI_AUTHOR_NAME?)
+    alt self-reply
+        W->>S: PATCH status=processed (reason=ai_authored)
+        W->>S: PATCH /api/executions/{id} finish ok
+    else новый отзыв
+        W->>W: detect_tone (словарь, без LLM)
+        W->>TG: notify (опционально, если не notified)
+        W->>LLM: generate — active → fallback
+        LLM-->>W: ответ + meta {provider, model, latency, tokens, fallback_reason}
+        W->>S: POST /api/reviews parent_id (X-Worker-Token, exempt) — дочерний ответ
+        W->>S: PATCH /api/reviews/{id} status=processed, tone
+        W->>S: PATCH ответа status=processed
+        W->>S: PATCH /api/executions/{id} finish ok + steps
+        S->>DB: persist session ok + steps
+        W->>W: state.mark_processed + heartbeat
+    end
+```
+
+- **Self-reply guard** (шаг 4) — предотвращает бесконечный цикл: ответ воркера
+  создаётся как `new`, но `name=AI_AUTHOR_NAME`, поэтому на следующем цикле он
+  помечается `processed` без генерации. Двойная защита вместе с `PATCH` ответа в
+  `processed`.
+- **Idempotency-проверка** — если `is_processed(id)` в `state.json` → сессия
+  закрывается `ok`, пропуск дубля (окно до подтверждения `processed` сайтом).
+- **Fallback** — при `ProviderNotConfigured`/сбое/пустом ответе →
+  `build_fallback_response` (словарный шаблон по тону), `fallback_reason`
+  фиксируется в `step_metadata`.
 
 Админка `/admin` — 4 раздела в sidebar-лэйауте (домстиль AIP Dark): **Логин**
 (standalone), **Конфиг-консоль** (настройки провайдеров + промпт-файл-SOT +
@@ -160,177 +308,177 @@ flowchart TD
 **Аудит** (`/admin/audit`). Сайт — server-rendered Jinja2; `admin_base.html` —
 общий shell с sidebar-навигацией.
 
-### 🔀 4.2. Последовательность обработки одного отзыва
-
-1. **Клиент** оставляет отзыв → `POST /api/reviews` → сайт сохраняет `status=new`.
-2. **Воркер** (цикл `WORKER_POLL_INTERVAL`) → `GET /api/reviews?status=new` (серверный фильтр) → получает только новые.
-3. **Execution start:** `POST /api/executions` (с `X-Worker-Token`) → `execution_sessions` `status=started`. Вся дальнейшая обработка отзыва обёрнута в эту сессию.
-4. **Self-reply guard:** если `review.name == AI_AUTHOR_NAME` → шаг `mark_processed` (`reason=ai_authored`) → `PATCH status=processed` без генерации → finish сессии `ok`, переход к следующему. Это предотвращает бесконечный цикл (ответ воркера создаётся как `new`).
-5. **`detect_tone`** (шаг 1) — словарный классификатор (без LLM): positive/negative/neutral по маркерам. Тон фиксируется в `step_metadata`.
-6. **Telegram-уведомление** (шаг 2, опционально): если не `notified` и настроен токен → отправка; `mark_notified`. Иначе шаг `skipped`.
-7. **Idempotency-проверка:** если `is_processed(id)` в `state.json` → сессия закрывается `ok` (шаг `mark_processed` `skipped`), пропуск дубля.
-8. **`generate_response`** (шаг 3, `llm_call`) — `build_provider()` (runtime-config) + `load_system_prompt()` → `provider.generate()`. Возвращает `(text, meta)` где `meta={provider, model, latency_ms, tokens, fallback_reason}`. При `ProviderNotConfigured`/сбое/пустом ответе → `build_fallback_response` (`fallback_reason` фиксируется). `meta` пишется в `step_metadata`.
-9. **`create_review`** (шаг 4, `persist_reply`) — `POST /api/reviews` с `parent_id`, `name=AI_AUTHOR_NAME`, `text=ответ` → сайт создаёт дочерний комментарий `status=new`.
-10. **`update_review`** родителя → `PATCH status=processed, tone=...` (с `X-Worker-Token`).
-11. **`update_review`** ответа → `PATCH status=processed` (чтобы воркер не подхватил его как новый на следующем цикле — двойная защита вместе с self-reply guard).
-12. **`state.mark_processed`** (шаг 5) для родителя и ответа.
-13. **Execution finish:** `PATCH /api/executions/{id}` — `status=ok`, `provider_key`/`model_name` из LLM-meta, `duration_ms`, все шаги одним пакетом. На исключение в любом шаге — `finish(status=error)` + `logger.exception`.
-14. **`write_heartbeat`** → `heartbeat.json` (для Docker healthcheck).
-
 ---
 
-## 🤖 5. Мультипровайдерность и runtime-config
+## 🤖 6. Мультипровайдерность и runtime-config
 
-### 🤖 5.1. Унификация
+### 🤖 6.1. Унификация
 
-Все провайдеры унифицированы на **Chat Completions** (общий знаменатель), не на legacy `responses.create`. Абстракция — `ResponseProvider.generate(system_prompt, user_text, max_tokens=None) -> str` (опц. `max_tokens`-override — для дешёвого 1-токенного теста «Проверить»); для observability провайдер дополнительно раскрывает `name`, `model_name` и `last_usage` (токены последнего запроса, `None` если провайдер не вернул usage) — `processor.generate_response` собирает из них `meta` для execution-трассировки. Метод `test_connection() -> {ok, latency_ms, tokens, message}` делает минимальный real-вызов и используется внутренним test-API воркера (кнопка «Проверить»).
+Все провайдеры унифицированы на **Chat Completions** (общий знаменатель), не на legacy
+`responses.create`. Абстракция — `ResponseProvider.generate(system_prompt, user_text,
+max_tokens=None) -> str` (опц. `max_tokens`-override — для дешёвого 1-токенного теста
+«Проверить»); для observability провайдер дополнительно раскрывает `name`, `model_name`
+и `last_usage` (токены последнего запроса). Метод `test_connection() ->
+{ok, latency_ms, tokens, message}` делает минимальный real-вызов и используется
+внутренним test-API воркера (кнопка «Проверить»).
 
 | Провайдер | Реализация | Ключ | Параметры (config.json) |
 |-----------|-----------|------|------------------------|
 | OpenAI | `OpenAICompatibleProvider` (AsyncOpenAI, `base_url` из runtime) | `OPENAI_API_KEY` (.env) | `openai_model`, `openai_base_url`, `openai_temperature` (0.3), `openai_max_tokens` (1024), `openai_enabled` |
 | GigaChat | `GigaChatProvider` → `GigaChatAdapter` (urllib, OAuth per-request) | `GIGACHAT_AUTH_KEY` (.env) | `gigachat_model`, `gigachat_temperature` (0.1), `gigachat_max_tokens` (500), `gigachat_enabled` (`gigachat_base_url` — в .env, read-only) |
 
-Цепочка fallback: **активный LLM → fallback LLM** (если включён, сконфигурирован и отличается от активного) **→ словарные шаблоны**. `processor.generate_response` фиксирует провайдера-победителя и `fallback_reason` (`provider_not_configured`/`provider_error`/`empty_response`/`llm_fallback_used:<reason>`).
+Цепочка fallback: **активный LLM → fallback LLM** (если включён, сконфигурирован и
+отличается от активного) **→ словарные шаблоны**. `processor.generate_response`
+фиксирует провайдера-победителя и `fallback_reason` (`provider_not_configured`/
+`provider_error`/`empty_response`/`llm_fallback_used:<reason>`).
 
-### 🤖 5.2. Разделение секретов и runtime-параметров
+### 🤖 6.2. Разделение секретов и runtime-параметров
 
 | Где | Что | Кто меняет |
 |-----|-----|-----------|
 | `.env` | API-ключи (секреты) + `GIGACHAT_BASE_URL` | Владелец/инженер (перед развёртыванием) |
-| `config.json` (shared volume) | `active_provider`, `fallback_provider`, `openai_enabled`/`gigachat_enabled`, `openai_model`/`openai_base_url`/`openai_temperature`/`openai_max_tokens`, `gigachat_model`/`gigachat_temperature`/`gigachat_max_tokens` | Оператор через `/admin` (без рестарта) |
+| `config.json` (shared volume) | `active_provider`, `fallback_provider`, `openai_enabled`/`gigachat_enabled`, per-провайдер model/base_url/temperature/max_tokens | Оператор через `/admin` (без рестарта) |
 | `system_prompt.md` (shared volume) | Текст системного промпта (файл-SOT) | Оператор через `/admin` (без рестарта) |
 
-> 📌 Ключи API **никогда** не попадают в `config.json`/`system_prompt.md`/браузер/`/admin`. `/admin` хранит только runtime-параметры и промпт. Legacy-поле `provider` бесшовно мигрируется в `active_provider` при чтении.
+> 📌 Ключи API **никогда** не попадают в `config.json`/`system_prompt.md`/браузер/`/admin`.
+> `/admin` хранит только runtime-параметры и промпт. Legacy-поле `provider` бесшовно
+> мигрируется в `active_provider` при чтении.
 
-### 🤖 5.3. Hot-reload (mtime-кеш)
+### 🤖 6.3. Hot-reload (mtime-кеш)
 
-`RuntimeConfig` (воркер) кеширует `config.json` по `st_mtime`; `_PromptCache`
-кеширует `system_prompt.md` по `st_mtime`. При каждом обращении проверяется mtime;
-если изменился — перечитывается. Смена провайдера/модели/промпта через `/admin`
-применяется на **следующем цикле опроса** без рестарта воркера.
+`RuntimeConfig` (воркер) кеширует `config.json` по `st_mtime`; `_PromptCache` кеширует
+`system_prompt.md` по `st_mtime`. При каждом обращении проверяется mtime; если изменился —
+перечитывается. Смена провайдера/модели/промпта через `/admin` применяется на **следующем
+цикле опроса** без рестарта воркера.
 
 ---
 
-## 📝 6. Промпт
+## 📝 7. Промпт
 
 - **Файл-SOT:** `/data/runtime/system_prompt.md` (shared volume `runtime-config`) —
-  единственный источник текста системного промпта. `/admin` перезаписывает его
-  при редактировании; воркер читает и hot-reload'ит по mtime — смена применяется
-  на следующем цикле без рестарта.
+  единственный источник текста системного промпта. `/admin` перезаписывает его при
+  редактировании; воркер читает и hot-reload'ит по mtime — смена применяется на следующем
+  цикле без рестарта.
 - **Bootstrap:** при отсутствии shared-файла (первый запуск / чистый volume) воркер
   копирует вшитый `worker/prompts/v1/system.md` туда при старте (`worker.bootstrap_prompt`).
   Уже существующий файл НЕ перезаписывается — сохраняются правки оператора.
 - **Встроенный default** (`prompt_loader._BUILTIN_DEFAULT`) — fallback, только если
   shared-файл отсутствует (не должен случаться после bootstrap).
-- **Файл `worker/prompts/v1/system.md`** (вшит в образ) — начальный default для
-  bootstrap; не редактируется в runtime.
+- **Файл `worker/prompts/v1/system.md`** (вшит в образ) — начальный default для bootstrap;
+  не редактируется в runtime.
+
+Подробно — [📝 `PROMPT_ARCHITECTURE.md`](PROMPT_ARCHITECTURE.md).
 
 ---
 
-## 📊 7. Наблюдаемость
+## 📊 8. Наблюдаемость
 
-Проект реализует **три независимых контура observability**, каждый со своей
-зоной ответственности и носителем:
+**Три независимых контура observability**, каждый со своей зоной ответственности и носителем:
 
-### 📊 7.1. Контур 1 — stdout-логирование (базис)
+```mermaid
+flowchart LR
+    subgraph "Контур 1 — stdout"
+        Stdout["docker compose logs<br/>LOG_LEVEL"]
+    end
+    subgraph "Контур 2 — execution tracing"
+        Trace["/admin/executions<br/>трасса каждого отзыва"]
+    end
+    subgraph "Контур 3 — audit"
+        Audit["/admin/audit<br/>admin/security-события"]
+    end
+    Both[оба сервиса] --> Stdout
+    Worker -->|"POST/PATCH /api/executions"| Trace
+    Site -->|"AuditService"| Audit
+```
+
+### 📊 8.1. Контур 1 — stdout-логирование (базис)
 
 Централизованное логирование через `dictConfig` на старте обоих сервисов
-(`site/app/core/logging.py`, `worker/logging_config.py`). Уровень задаётся
-переменной `LOG_LEVEL` (по умолчанию `INFO`). Шумные логгеры `httpx`/`openai`
-приглушены до `WARNING` (убирает спам опроса `GET /api/reviews?status=new`
-каждые `WORKER_POLL_INTERVAL` секунд, ошибки остаются видны).
+(`site/app/core/logging.py`, `worker/logging_config.py`). Уровень — `LOG_LEVEL` (по
+умолчанию `INFO`). Шумные логгеры `httpx`/`openai` приглушены до `WARNING`. Формат:
+`%(asctime)s | %(levelname)s | %(name)s | %(message)s`. Дешёвый базис для
+`docker compose logs`.
 
-Формат: `%(asctime)s | %(levelname)s | %(name)s | %(message)s`. Бизнес-события
-сайта (`review.create`, `review.update`) и воркера (`Processing review id=...`)
-пишутся сюда. Дешёвый базис для `docker compose logs`.
+### 📊 8.2. Контур 2 — execution tracing (БД)
 
-### 📊 7.2. Контур 2 — execution tracing (БД, обработка отзыва)
-
-БД-персистентный контур обработки одного отзыва воркером. Каждая обработка =
-`ExecutionSession` (статус/провайдер/модель/длительность), стадии пайплайна =
-`ExecutionStep` с таймингом и `step_metadata` (для LLM-шага —
-`provider`/`model`/`latency_ms`/`tokens`/`fallback_reason`).
-
-Двухфазная запись через API сайта (у воркера нет БД-сессии — он отдельный
-сервис с httpx): `POST /api/executions` (start, `status=started`) → воркер
-собирает шаги в памяти с `perf_counter`-таймингом → `PATCH /api/executions/{id}`
-(finish: `status=ok`/`error`, провайдер/модель, шаги одним пакетом). 2 HTTP-вызова
-на отзыв. При падении воркера остаётся `started`-сессия (видна как зависшая —
-диагностический признак). Просмотр: `/admin/executions` (read-only, demo допущен).
+Каждая обработка = `ExecutionSession` (статус/провайдер/модель/длительность), стадии =
+`ExecutionStep` с таймингом и `step_metadata`. Просмотр: `/admin/executions` (read-only,
+demo допущен).
 
 > 🖼️ **Консоль «Логи» (`/admin/executions`) — master-detail «Запрос → Ответ»:**
 > ![Список обработок с фильтрами + правая панель с цепочкой этапов пайплайна и метриками](screenshots/RAR_admin_executions.png)
 >
-> Левая панель — список обработок с фильтрами (период/статус/тон) и поиском по
-> `review_id`; правая — цепочка этапов пайплайна (получение → классификация тона →
-> генерация LLM → сохранение → отметка обработано) с per-step-метриками
-> latency/токенов и таймлайном.
+> Слева — список обработок с фильтрами (период/статус/тон) и поиском по `review_id`;
+> справа — цепочка этапов (получение → классификация → генерация LLM → сохранение →
+> отметка обработано) с per-step-метриками и таймлайном.
 
-### 📊 7.3. Контур 3 — audit (БД, admin/security-события)
+### 📊 8.3. Контур 3 — audit (БД)
 
-БД-персистентный контур admin/security-событий в `audit_logs`. Записывает
-**кто, что, когда и откуда** сделал: `user_id`/`user_name`/`user_role`,
-`action`, `resource_type`/`resource_id`, `ip_address`, `details` (JSON). События:
+Журнал admin/security-событий в `audit_logs`: кто/что/когда/откуда. Просмотр:
+`/admin/audit` (read-only, demo допущен). Read-only-просмотры **не аудируются** (анти-self-noise).
 
 | Action | Когда | details |
 |--------|-------|---------|
 | `admin.login_success` / `admin.login_failed` | вход в `/admin` | ip, path |
-| `admin.login_success` (demo) | одно-кликовой демо-вход (`POST /admin/login/demo`) | role=demo, `entry=demo_button` (отличим от входа по токену) |
-| `admin.config_update` | сохранение runtime-config | active/fallback/enabled, model/base_url/temperature/max_tokens per-провайдер, prompt_len, prompt_changed, changed_keys (без текста промпта) |
-| `admin.provider_test` | кнопка «Проверить» (real-тест провайдера) | provider, ok, результат (latency/tokens/message), error |
+| `admin.login_success` (demo) | одно-кликовой демо-вход | role=demo, `entry=demo_button` |
+| `admin.config_update` | сохранение runtime-config | active/fallback/enabled, per-провайдер параметры, `prompt_len`, `prompt_changed`, `changed_keys` (без текста промпта) |
+| `admin.provider_test` | кнопка «Проверить» | provider, ok, latency/tokens/message, error |
 | `admin.rbac_denied` | demo-попытка мутации → 403 | ip, path |
 | `auth.worker_denied` | плохой/отсутствующий `X-Worker-Token` → 401 | ip, path |
 
-Read-only-просмотры (`/admin/audit`, `/admin/executions`) **не аудируются** —
-чтобы журнал не засорялся self-noise. Просмотр аудита: `/admin/audit` (read-only,
-demo допущен). Секреты и полный текст промпт-override в `details` не пишутся.
-
-### 📊 7.4. Сводная таблица сигналов
+### 📊 8.4. Сводная таблица сигналов
 
 | Сигнал | Контур | Где | Назначение |
 |--------|--------|-----|-----------|
 | `GET /health` | — | сайт | Deployment Verification/Validation |
 | `GET /admin/status` | — | сайт (`/admin`) | JSON-сводка + блок «Состояние системы»: БД-проба, метрики, liveness воркера, статус провайдеров, последние ошибки |
-| `heartbeat.json` | — | воркер (`/service/data/`) | Docker healthcheck: mtime/`last_iteration_at` не старше `WORKER_HEALTHCHECK_MAX_AGE` |
+| `heartbeat.json` | — | воркер (`/service/data/`) | Docker healthcheck: mtime не старше `WORKER_HEALTHCHECK_MAX_AGE` |
 | `status.json` | — | shared volume (`/data/runtime/`) | Воркер пишет liveness + bool-флаги «провайдер сконфигурирован» (без секретов); сайт читает для `/admin/status` без HTTP-вызова |
 | stdout-логи | 1 | оба сервиса | Этапы обработки (INFO), сбои провайдера (WARNING/EXCEPTION) |
 | `execution_sessions` + `execution_steps` | 2 | БД (`/admin/executions`) | Трасса пайплайна + LLM-метрики каждого отзыва |
 | `audit_logs` | 3 | БД (`/admin/audit`) | Журнал admin/security-событий |
 | `state.json` | — | воркер | Идемпотентность (не observability) |
 
-### 📊 7.5. Консоль состояния системы (`/admin/status`)
+### 📊 8.5. Консоль состояния системы (`/admin/status`)
 
-Read-only обзор здоровья: `overall` (ok/degraded) + живые пробы компонентов
-(`database` — `SELECT 1` + latency) +
-метрики БД (отзывы new/processed, трейсы ok/error/started, аудит-счётчик,
-последняя сессия) + текущий применённый конфиг + liveness воркера + статус
+Read-only обзор здоровья: `overall` (ok/degraded) + живые пробы компонентов (`database` —
+`SELECT 1` + latency) + метрики БД + текущий конфиг + liveness воркера + статус
 провайдеров (bool-флаги configured) + последние ошибки трейсов.
 
-Воркер пишет `status.json` в **shared volume** каждую итерацию
-(`write_worker_status`): `worker_alive`, `last_iteration_at`, `current_provider`,
-`active_provider`, `fallback_provider`, `openai_enabled`, `gigachat_enabled`,
-`poll_interval`, `providers: {openai/gigachat: bool}`, `gigachat_base_url` (публичный,
-несекретный — для read-only отображения в карточке), `telegram: bool`. Сайт читает файл
-(`admin_status._read_worker_status`), liveness = `last_iteration_at` свежее
-`3 × poll_interval`. Секреты (ключи) в файл **не** пишутся — только булевы флаги.
+Воркер пишет `status.json` в **shared volume** каждую итерацию: `worker_alive`,
+`last_iteration_at`, `current_provider`, `active_provider`, `fallback_provider`,
+`openai_enabled`, `gigachat_enabled`, `poll_interval`, `providers: {openai/gigachat: bool}`,
+`gigachat_base_url` (публичный, несекретный), `telegram: bool`. Сайт читает файл, liveness =
+`last_iteration_at` свежее `3 × poll_interval`. Секреты в файл **не** пишутся.
 
-Для кнопки «Проверить» воркер дополнительно поднимает **внутренний test-HTTP-сервер**
-(`worker/api.py`, stdlib `asyncio.start_server`, порт `WORKER_API_PORT` по умолч. 8001,
-**не публикуется на хост**). Эндпоинт `POST /provider-test` защищён header
-`X-Worker-Token` (= `WORKER_API_TOKEN`), выполняет `build_provider_for_key` +
-`test_connection()` и возвращает `{ok, provider, model, latency_ms, tokens, message}`.
-Сайт проксирует запрос через `POST /admin/test-provider` (`require_admin`, stdlib
-`urllib` через `asyncio.to_thread`) — LLM-ключи остаются на воркере, сайт их не получает.
-
-Блок «Состояние системы» рендерится в `/admin` (server-side, из тех же данных);
-`GET /admin/status` отдаёт JSON для будущего JS-дэшборда. Auth: `admin_auth`
-(demo допущен, read-only, не аудируется).
+Для кнопки «Проверить» воркер поднимает **внутренний test-HTTP-сервер** (`worker/api.py`,
+порт `WORKER_API_PORT`, **не публикуется на хост**). `POST /provider-test` защищён
+`X-Worker-Token`, выполняет `build_provider_for_key` + `test_connection()`. Сайт проксирует
+через `POST /admin/test-provider` (`require_admin`) — LLM-ключи остаются на воркере.
 
 ---
 
-## 🚀 8. Развёртывание
+## 🚀 9. Развёртывание
 
-Единый `docker-compose.yml`: `db` + `review-site` + `review-worker`, healthcheck на каждом сервисе, shared volume `runtime-config`. Подробно — [🚀 `DEPLOYMENT_GUIDE.md`](DEPLOYMENT_GUIDE.md).
+```mermaid
+flowchart LR
+    subgraph "Docker Compose"
+        DB[("db · postgres:16-alpine")]
+        Site["review-site :8000<br/>+ /health"]
+        Worker["review-worker<br/>+ /healthcheck"]
+        Vol[("volume runtime-config<br/>config.json · system_prompt.md · status.json")]
+    end
+    Proxy["Traefik reverse proxy<br/>TLS · review-auto-responder.alex-n8n.site"]
+
+    Proxy --> Site
+    Site <--> DB
+    Worker -->|"API сайта"| Site
+    Site <--> Vol
+    Worker <--> Vol
+```
+
+Единый `docker-compose.yml`: `db` + `review-site` + `review-worker`, healthcheck на каждом
+сервисе, shared volume `runtime-config`. Подробно — [🚀 `DEPLOYMENT_GUIDE.md`](DEPLOYMENT_GUIDE.md).
 
 ---
 

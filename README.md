@@ -8,6 +8,22 @@
 
 ---
 
+## 🌐 Публичные точки входа
+
+| Точка | URL | Назначение |
+|-------|-----|-----------|
+| **Сайт отзывов** | `https://review-auto-responder.alex-n8n.site/` | Публичная форма: оставить отзыв, читать тред с ответами `AI Support` |
+| **Операторская панель** | `…/admin` | runtime-config провайдеров/промпта, observability, аудит (вход — полный токен или демо-режим) |
+| **Демо-вход в админку** | `…/admin/login/demo` | Одно-кликовой read-only просмотр без токена в браузере (сервер ставит cookie) |
+| **Health** | `…/health` | `{"status":"ok"}` — Deployment Verification/Validation |
+| **Telegram** | оператору | Уведомление о каждом новом отзыве с тональностью (опционально) |
+
+> 📌 Локально после `docker compose up -d --build`: сайт — `http://localhost:8000/`,
+> админка — `…/admin`, health — `…/health`. Посетителю регистрация не нужна — только
+> текст отзыва.
+
+---
+
 ## 🎬 Демо-тур
 
 Короткий визуальный обзор системы. Полный скриншот-тур — в [🎬 `docs/SYSTEM_DEMO.md`](docs/SYSTEM_DEMO.md).
@@ -95,45 +111,50 @@ docker compose up -d --build
 
 ---
 
-## 📊 6. Observability — три контура
+## 📊 6. Observability
 
-| Контур | Носитель | Назначение | Просмотр |
-|--------|----------|-----------|----------|
-| **stdout-логирование** | `docker compose logs` | Этапы обработки, сбои провайдера; уровень через `LOG_LEVEL` | логи сервисов |
-| **Состояние системы** | БД-пробы + live-статус воркера | overall/БД, метрики, liveness воркера, статус провайдеров, последние ошибки | `/admin/status` + блок в `/admin` |
-| **Трассы обработок** | БД | Трасса пайплайна каждого отзыва: статус, провайдер/модель, длительность, LLM-метрики | `/admin/executions` |
-| **Журнал аудита** | БД | Журнал admin/security-событий: входы в `/admin`, смена конфига, RBAC-отказы, отказы сервисного токена | `/admin/audit` |
-
-Панели `/admin/executions`, `/admin/audit` и `/admin/status` — read-only,
-доступны и admin-, и demo-токеном. Подробно — [🏗️ ARCHITECTURE.md §7](docs/ARCHITECTURE.md),
-[🛡️ SECURITY_NOTES.md §6–7](docs/SECURITY_NOTES.md),
-[🔌 API_CONTRACT.md §2.4, §3–4](docs/API_CONTRACT.md).
+Три контура наблюдаемости: stdout-логи (`docker compose logs`, `LOG_LEVEL`),
+execution-трейсы обработки каждого отзыва (`/admin/executions`) и журнал
+admin/security-событий (`/admin/audit`). Сводное состояние — `/admin/status`
+и блок «Состояние системы» в `/admin`. Все панели read-only, доступны и admin-,
+и demo-токеном. Подробно — [🏗️ ARCHITECTURE.md §8](docs/ARCHITECTURE.md),
+[🎛️ OPERATOR_GUIDE.md §7](docs/OPERATOR_GUIDE.md),
+[🛡️ SECURITY_NOTES.md §6–7](docs/SECURITY_NOTES.md).
 
 ---
 
 ## 📚 7. Документация
 
-**Пользование и демо:**
-- [📖 `docs/USER_GUIDE.md`](docs/USER_GUIDE.md) — как пользоваться сайтом отзывов.
-- [🎬 `docs/SYSTEM_DEMO.md`](docs/SYSTEM_DEMO.md) — скриншот-тур по системе.
-- [🎬 `docs/E2E_SCENARIOS.md`](docs/E2E_SCENARIOS.md) — сквозные демо-сценарии (сайт + `/admin` + Telegram).
-- [🎛️ `docs/OPERATOR_GUIDE.md`](docs/OPERATOR_GUIDE.md) — руководство оператора `/admin` (runtime-config, промпт, observability).
-- [💼 `docs/BUSINESS_VALUE.md`](docs/BUSINESS_VALUE.md) — ценность, целевая аудитория, паттерн «сбор + AI-реакция 24/7».
+### Для заказчиков и менеджеров
 
-**Техническая:**
-- [🏗️ `docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — архитектура и путь данных.
-- [📋 `docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) — технический план.
-- [🔌 `docs/API_CONTRACT.md`](docs/API_CONTRACT.md) — контракты HTTP API.
-- [📝 `docs/PROMPT_ARCHITECTURE.md`](docs/PROMPT_ARCHITECTURE.md) — архитектура промпта (файл-SOT, lifecycle, аудит).
-- [🤖 `docs/EXTERNAL_PROVIDERS.md`](docs/EXTERNAL_PROVIDERS.md) — параметры LLM-провайдеров.
-- [🛡️ `docs/SECURITY_NOTES.md`](docs/SECURITY_NOTES.md) — безопасность, демо-RBAC и демо-лимиттер.
+| Документ | Описание |
+|----------|----------|
+| [💼 `docs/BUSINESS_VALUE.md`](docs/BUSINESS_VALUE.md) | Бизнес-проблема, решение, эффект, выгода |
+| [🎬 `docs/SYSTEM_DEMO.md`](docs/SYSTEM_DEMO.md) | Скриншоты, диалоги, бизнес-сценарии |
+| [🎬 `docs/E2E_SCENARIOS.md`](docs/E2E_SCENARIOS.md) | Сквозные сценарии (сайт + `/admin` + Telegram) |
 
-**Развёртывание и проверка:**
-- [🚀 `docs/DEPLOYMENT_GUIDE.md`](docs/DEPLOYMENT_GUIDE.md) — развёртывание с нуля (SOT воспроизводимости).
-- [✅ `docs/DEPLOYMENT_VALIDATION_REPORT.md`](docs/DEPLOYMENT_VALIDATION_REPORT.md) — отчёт воспроизводимости в чистом окружении.
-- [🧪 `docs/TESTING.md`](docs/TESTING.md) — стратегия тестирования (4 уровня проверки).
-- [📊 `docs/PROJECT_STATE.md`](docs/PROJECT_STATE.md) — паспорт состояния проекта.
-- [📋 `docs/SPEC.md`](docs/SPEC.md) — продуктовая спецификация (замороженный baseline).
+### Для пользователей и операторов
+
+| Документ | Описание |
+|----------|----------|
+| [📖 `docs/USER_GUIDE.md`](docs/USER_GUIDE.md) | Как пользоваться сайтом отзывов посетителю |
+| [🎛️ `docs/OPERATOR_GUIDE.md`](docs/OPERATOR_GUIDE.md) | Управление `/admin`: runtime-config, промпт, observability |
+
+### Для инженеров и интеграторов
+
+| Документ | Описание |
+|----------|----------|
+| [🏗️ `docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Архитектура, C4-схемы, модель данных, потоки данных |
+| [📋 `docs/SPEC.md`](docs/SPEC.md) | Продуктовая спецификация (замороженный baseline) |
+| [📋 `docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) | Технический план и критерии готовности |
+| [🔌 `docs/API_CONTRACT.md`](docs/API_CONTRACT.md) | Контракты HTTP API сайта и воркера |
+| [📝 `docs/PROMPT_ARCHITECTURE.md`](docs/PROMPT_ARCHITECTURE.md) | Архитектура промпта (файл-SOT, lifecycle, аудит) |
+| [🤖 `docs/EXTERNAL_PROVIDERS.md`](docs/EXTERNAL_PROVIDERS.md) | Параметры LLM-провайдеров (OpenAI/GigaChat) |
+| [🛡️ `docs/SECURITY_NOTES.md`](docs/SECURITY_NOTES.md) | Безопасность, демо-RBAC, демо-лимиттер |
+| [🧪 `docs/TESTING.md`](docs/TESTING.md) | Стратегия тестирования (4 уровня проверки) |
+| [🚀 `docs/DEPLOYMENT_GUIDE.md`](docs/DEPLOYMENT_GUIDE.md) | Развёртывание с нуля (Source of Truth) |
+| [✅ `docs/DEPLOYMENT_VALIDATION_REPORT.md`](docs/DEPLOYMENT_VALIDATION_REPORT.md) | Отчёт воспроизводимости в чистом окружении |
+| [📊 `docs/PROJECT_STATE.md`](docs/PROJECT_STATE.md) | Паспорт состояния проекта и roadmap |
 
 ---
 
@@ -163,13 +184,12 @@ docker compose up -d --build
 
 ---
 
-## 📝 9. История
+## ✅ 9. Статус проекта
 
-| Дата | Версия | Изменение |
-|------|--------|-----------|
-| 2026-08-13 | 1.0 | Доработка legacy: мультипровайдерность, `/admin` runtime-config, промпт-в-файле, единый compose, демо-RBAC, `/health`, Deployment Validation |
-| 2026-08-13 | 1.1 | Observability: три контура — stdout-логирование (`LOG_LEVEL`), execution-tracing (`/admin/executions`), аудит (`/admin/audit`); LLM-метрики в трассах |
-| 2026-08-13 | 1.2 | AIP Dark-редизайн админки (sidebar, 4 консоли); промпт — файл-SOT на shared volume (`system_prompt.md`, bootstrap из `prompts/v1/system.md`); консоль состояния системы `/admin/status` (БД-пробы, метрики, liveness воркера через `status.json` в shared volume, статус провайдеров) |
-| 2026-08-13 | 1.3 | Конфиг-консоль: двухколоночный лэйаут (карточки провайдеров OpenAI/GigaChat слева, промпт справа); ряд состояния системы — 5 плиток (PostgreSQL/Воркер/LLM/Telegram/API); per-provider модели (`gigachat_model`); Yandex-провайдер убран из кода и docs |
-| 2026-08-13 | 1.4 | Паритет конфиг-консоли с эталонной Admin Console: единый хидер «Admin Console» + «Zerocoder», role-бейдж в сайдбаре, per-console page-header; две панели side-by-side («Настройки LLM и провайдера» \| «Системный промпт»); карточки провайдеров слева направо со всеми параметрами (Base URL/Model/Temperature/Max tokens/Включён/Проверить); active/fallback LLM-цепочка; тултипы вместо inline-текстов; выровнены шрифты. «Проверить» — real-тест через внутренний test-API воркера (`worker/api.py`, stdlib asyncio, порт не публикуется) + site-proxy `/admin/test-provider` (ключи только на воркере) |
-| 2026-08-14 | 1.5 | Демо-стандарт входа и сессионные лимиты: одно-кликовой демо-вход в `/admin` (сервер ставит cookie, токен не попадает в браузер) + токенизированный демо-лимиттер публичной формы `POST /api/reviews` (квота 5/сессию, 3 уровня — sessions/IP/час, rate-limit, квота; воркер exempt по `X-Worker-Token`) |
+✅ **Портфельный актив.** Реализован, прошёл Deployment Validation в чистом
+окружении (18/18 PASS), опубликован как публичный репозиторий с живым демо.
+
+Текущая версия — **v1.5**: демо-стандарт входа в админку (одно-кликовой server-side
+demo-login) + токенизированный демо-лимиттер публичной формы (квота 5/сессию).
+
+Полная история статусов и roadmap — в [📊 `docs/PROJECT_STATE.md`](docs/PROJECT_STATE.md).
