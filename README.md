@@ -188,7 +188,33 @@ admin/security-событий (`/admin/audit`). Сводное состояни�
 
 ---
 
-## ✅ 9. Статус проекта
+## 🧭 9. Минимальный путь по коду
+
+Чтобы понять систему, достаточно прочитать эти файлы по порядку — это
+**учебное ядро**, сохранённое из исходного проекта `worker_ai`:
+
+1. [`worker/worker.py`](worker/worker.py) — основной цикл опроса и оркестрация:
+   получил новые отзывы → `detect_tone` → Telegram → генерация → публикация ответа → закрытие.
+2. [`worker/client.py`](worker/client.py) — HTTP-слой к API сайта
+   (`fetch_new_reviews` с `?status=new`, `create_review`, `update_review`, execution-трейсы).
+3. [`worker/processor.py`](worker/processor.py) — `detect_tone` (словарный
+   классификатор) и `generate_response` (active → fallback → словарные шаблоны).
+4. [`worker/state.py`](worker/state.py) — `state.json` (`notified`/`processed`),
+   вторичный guard от повторной обработки и дублей уведомлений.
+5. [`worker/providers/factory.py`](worker/providers/factory.py) — выбор
+   active/fallback LLM-провайдера по `config.json` (точка входа в мультипровайдерность).
+6. [`site/app/api/routes.py`](site/app/api/routes.py) — публичный API сайта
+   (`POST/GET/PATCH /api/reviews`, `/health`).
+
+> 📌 Продакшн-расширения (мультипровайдерность, `/admin`, execution-трейсы, аудит,
+> демо-квота, промпт-файл-SOT) физически изолированы в отдельных модулях и
+> изучаются опционально — ядро от них не зависит. Полная карта — в
+> [📂 `docs/PROJECT_STRUCTURE.md`](docs/PROJECT_STRUCTURE.md), архитектура — в
+> [🏗️ `docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
+---
+
+## ✅ 10. Статус проекта
 
 ✅ **Портфельный актив.** Реализован, прошёл Deployment Validation в чистом
 окружении (18/18 PASS), опубликован как публичный репозиторий с живым демо.
