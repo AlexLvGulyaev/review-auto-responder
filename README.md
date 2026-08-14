@@ -47,7 +47,7 @@
 | 🤖 **Мультипровайдерность** | OpenAI / GigaChat (Сбер) — через единую абстракцию Chat Completions; per-провайдер temperature/max_tokens; active/fallback LLM-цепочка; карточки провайдеров в `/admin` |
 | 🎛️ **Смена провайдера без рестарта** | Операторская панель `/admin`: активный/fallback провайдер, модель, base_url, temperature, max_tokens, промпт — применяются на следующем цикле опроса |
 | ✅ **«Проверить»** | Real-тест доступности LLM-провайдера (1-токенный вызов) через внутренний test-API воркера — ключи остаются на воркере, сайт их не получает |
-| 📝 **Промпт — файл-SOT** | `system_prompt.md` на shared volume — единственный SOT промпта; `/admin` перезаписывает его (bootstrap из вшитого `prompts/v1/system.md`) |
+| 📝 **Промпт — файл-SOT** | Промпт хранится в файле и редактируется в runtime через `/admin` (правка без деплоя) — детали в [📝 `PROMPT_ARCHITECTURE.md`](docs/PROMPT_ARCHITECTURE.md) |
 | 🔐 **Демо-RBAC админки** | Два токена: полный (`ADMIN_TOKEN`) и read-only демо (`ADMIN_DEMO_TOKEN`) — backend-guard на мутации |
 | 🖥️ **AIP Dark админка** | Единый хидер «Admin Console» + «Zerocoder», sidebar с role-бейджем; Конфиг-консоль (провайдеры + промпт + состояние системы), Обсервабилити, Аудит |
 | 📈 **Консоль состояния системы** | `/admin/status`: живая проба БД, метрики, liveness воркера, статус провайдеров (воркер пишет `status.json` в shared volume) |
@@ -100,9 +100,9 @@ docker compose up -d --build
 | Контур | Носитель | Назначение | Просмотр |
 |--------|----------|-----------|----------|
 | **stdout-логирование** | `docker compose logs` | Этапы обработки, сбои провайдера; уровень через `LOG_LEVEL` | логи сервисов |
-| **Состояние системы** | БД-пробы + `status.json` (shared volume) | overall/БД, метрики, liveness воркера, статус провайдеров, последние ошибки | `/admin/status` + блок в `/admin` |
-| **Execution tracing** | БД (`execution_sessions` + `execution_steps`) | Трасса пайплайна каждого отзыва: статус, провайдер/модель, длительность, LLM-метрики (latency/tokens/fallback_reason) | `/admin/executions` |
-| **Audit** | БД (`audit_logs`) | Журнал admin/security-событий: входы в `/admin`, смена конфига, RBAC-отказы, отказы `X-Worker-Token` | `/admin/audit` |
+| **Состояние системы** | БД-пробы + live-статус воркера | overall/БД, метрики, liveness воркера, статус провайдеров, последние ошибки | `/admin/status` + блок в `/admin` |
+| **Трассы обработок** | БД | Трасса пайплайна каждого отзыва: статус, провайдер/модель, длительность, LLM-метрики | `/admin/executions` |
+| **Журнал аудита** | БД | Журнал admin/security-событий: входы в `/admin`, смена конфига, RBAC-отказы, отказы сервисного токена | `/admin/audit` |
 
 Панели `/admin/executions`, `/admin/audit` и `/admin/status` — read-only,
 доступны и admin-, и demo-токеном. Подробно — [🏗️ ARCHITECTURE.md §7](docs/ARCHITECTURE.md),

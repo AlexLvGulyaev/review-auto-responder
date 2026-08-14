@@ -1,8 +1,7 @@
 # 🎬 E2E_SCENARIOS.md — Review Auto Responder
 
 **Проект:** review-auto-responder
-**Дата создания:** 2026-08-14
-**Последнее обновление:** 2026-08-14
+**Дата:** 2026-08-14
 **Статус:** as-built — сценарии воспроизводимы на живом демо и локальном развёртывании.
 
 > 🌐 **Живое демо:** <https://review-auto-responder.alex-n8n.site> (ответы —
@@ -130,16 +129,11 @@
 
 1. Войдите демо-кнопкой (сценарий §5).
 2. Откройте конфиг-консоль — карточки провайдеров и промпт видны (read-only).
-3. Попытка сохранить через UI отключена. Прямой API-вызов подтверждает guard:
-
-```bash
-curl -s -o /dev/null -w "%{http_code}\n" -X POST http://localhost:8000/admin \
-  -b /tmp/demo_cookies.txt \
-  -d "active_provider=openai&fallback_provider=gigachat&openai_model=x&openai_base_url=x&openai_temperature=0.3&openai_max_tokens=1&gigachat_model=x&gigachat_temperature=0.1&gigachat_max_tokens=1"
-```
+3. Попытка сохранить через UI отключена. Прямой `POST /admin` с demo-токеном
+   подтверждает guard → `403`.
 
 **Ожидаемый результат:** `403`. Backend — единственный реальный guard: UI лишь
-отключает кнопку, но защита — на сервере (`require_admin`, demo → 403).
+отключает кнопку, но защита — на сервере. Детали эндпоинта — [🔌 `API_CONTRACT.md` §2](API_CONTRACT.md), [🎛️ `OPERATOR_GUIDE.md` §1](OPERATOR_GUIDE.md).
 
 ![/admin под демо-входом: role-бейдж «Демо-режим», кнопка сохранения отключена](screenshots/RAR_admin_demo_view.png)
 
@@ -160,10 +154,9 @@ curl -s -o /dev/null -w "%{http_code}\n" -X POST http://localhost:8000/admin \
 4. Нажмите **Сохранить** (в хидере консоли) → `?saved=1`.
 5. Оставьте новый отзыв (сценарий §3).
 
-**Ожидаемый результат:** воркер подхватит новый `config.json` (по mtime) на
-следующем цикле — без рестарта контейнера. В логах: `Runtime config reloaded:
-active=gigachat fallback=openai model=GigaChat-Max`. Ответ сгенерирован через
-активный LLM; при сбое активного — fallback LLM, затем словарные шаблоны.
+**Ожидаемый результат:** воркер подхватит новый конфиг на следующем цикле — без
+рестарта контейнера. Ответ сгенерирован через активный LLM; при сбое активного —
+fallback LLM, затем словарные шаблоны.
 
 ![Конфиг-консоль /admin: карточки провайдеров, промпт, ряд «Состояние системы»](screenshots/RAR_admin_config.png)
 
@@ -230,7 +223,7 @@ active=gigachat fallback=openai model=GigaChat-Max`. Ответ сгенерир
 **Шаги:**
 
 1. Откройте `/admin` — блок «Состояние системы» вверху (ридонли).
-2. Или `GET /admin/status` (JSON): общий статус, проба БД (`SELECT 1` + latency),
+2. Или `GET /admin/status` (JSON): общий статус, проба БД (живой запрос + latency),
    метрики (отзывы new/processed, трейсы ok/error, аудит-счётчик), liveness
    воркера, статус провайдеров.
 
@@ -254,8 +247,9 @@ active=gigachat fallback=openai model=GigaChat-Max`. Ответ сгенерир
    токены/latency), таймлайн, JSON-снимок.
 4. Стрелки ↑/↓ перебирают записи без перезагрузки; deep-link `/admin/executions/{id}`.
 
-**Ожидаемый результат:** шаг `llm_call` несёт `{provider, model, latency_ms, tokens,
-fallback_reason}`. При падении воркера остаётся `started`-сессия (диагностический признак).
+**Ожидаемый результат:** шаг LLM-вызова несёт метрики провайдера (модель, длительность,
+токены, fallback-причина) — структура полей в [🏗️ `ARCHITECTURE.md` §7](ARCHITECTURE.md).
+При падении воркера остаётся `started`-сессия (диагностический признак).
 
 ![Консоль /admin/executions: master-detail «Запрос → Ответ», цепочка этапов](screenshots/RAR_admin_executions.png)
 

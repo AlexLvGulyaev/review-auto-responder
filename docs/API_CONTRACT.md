@@ -1,8 +1,7 @@
 # 🔌 API_CONTRACT.md — Review Auto Responder
 
 **Проект:** review-auto-responder
-**Дата создания:** 2026-08-13
-**Последнее обновление:** 2026-08-14
+**Дата:** 2026-08-14
 **Статус:** Engineering Layer — контракты HTTP API сайта.
 
 Базовый URL сайта: `http://localhost:8000` (после `docker compose up`).
@@ -116,7 +115,7 @@ Health-эндпоинт для Deployment Verification/Validation.
 { "session_id": "optional-client-id" }
 ```
 
-**Ответ:** `201` (в коде — `200` от FastAPI на POST-роуте с response_model)
+**Ответ:** `200 OK`
 ```json
 {
   "token": "demo_a1b2c3...",
@@ -383,6 +382,7 @@ HTML: параметры сессии (статус/провайдер/моде�
 | `admin.login_success` / `admin.login_failed` | `POST /admin/login` |
 | `admin.login_success` (demo) | `POST /admin/login/demo` — `role=demo`, `details.entry=demo_button` (отличим от входа по токену) |
 | `admin.config_update` | `POST /admin` (успешное сохранение) |
+| `admin.provider_test` | `POST /admin/test-provider` («Проверить») — provider, ok, результат (latency/tokens/message), error |
 | `admin.rbac_denied` | demo-попытка мутации → `403` |
 | `auth.worker_denied` | плохой `X-Worker-Token` на `PATCH /api/reviews` / `/api/executions` → `401` |
 

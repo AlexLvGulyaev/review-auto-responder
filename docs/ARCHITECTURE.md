@@ -1,8 +1,7 @@
 # 🏗️ ARCHITECTURE.md — Review Auto Responder
 
 **Проект:** review-auto-responder
-**Дата создания:** 2026-08-13
-**Последнее обновление:** 2026-08-14
+**Дата:** 2026-08-14
 **Статус:** Engineering Layer — архитектура и путь данных.
 
 ---
@@ -22,7 +21,7 @@
 
 | Компонент | Технология | Ответственность |
 |-----------|-----------|----------------|
-| `review-site` | FastAPI, SQLAlchemy 2 (async), asyncpg, Jinja2 | Хранение отзывов, публичный UI, `/admin` runtime-config, `/health` |
+| `review-site` | FastAPI, SQLAlchemy 2 (async), asyncpg, Jinja2 | Хранение отзывов, публичный UI, `/admin` runtime-config + консоль состояния, демо-лимиттер (квота `POST /api/reviews`), `/health` |
 | `review-worker` | asyncio, httpx, openai SDK, urllib (GigaChat) | Опрос, классификация тона, генерация ответа, write-back, Telegram |
 | `db` | PostgreSQL 16 | Хранилище отзывов (самоссылающаяся модель `Review`) |
 | `runtime-config` (volume) | shared volume: `config.json` + `system_prompt.md` + `status.json` | Runtime-параметры (`config.json`), промпт-файл-SOT (`system_prompt.md`), status-снапшот воркера (`status.json`); `/admin` пишет config+промпт, воркер пишет status, оба читают по mtime/файлу |
@@ -94,8 +93,27 @@ Threaded-структура: ответ воркера — это строка `
 | `details` | JSONB | Контекст (без секретов и полных промптов) |
 | `created_at` | datetime | Время события |
 
-> 📌 Таблицы observability создаются `Base.metadata.create_all` в lifespan сайта
-> (Alembic не используется — idempotent для существующей БД демо).
+### 🗂️ 3.6. Таблица `demo_sessions` (v1.5 — токенизированная демо-квота)
+
+| Поле | Тип | Назначение |
+|------|-----|-----------|
+| `id` | int PK | Идентификатор сессии |
+| `token` | str unique | `X-Demo-Token` (выдаётся `POST /api/demo/start`, хранится в localStorage посетителя) |
+| `session_id` | str \| null | Идентификатор сессии (для корреляции) |
+| `client_ip` | str \| null | IP посетителя (для лимита sessions/IP/час) |
+| `requests_used` | int | Израсходовано запросов (инкремент при каждом `POST /api/reviews`) |
+| `requests_limit` | int (default 5) | Квота на сессию (`DEMO_MAX_REQUESTS_PER_SESSION`) |
+| `is_active` | bool (default true) | Активна ли сессия |
+| `created_at` | datetime | Время создания |
+| `expires_at` | datetime | Срок жизни (`DEMO_SESSION_TTL_MINUTES`, default 30) |
+| `last_request_at` | datetime \| null | Время последнего запроса (для rate-limit `DEMO_RATE_LIMIT_PER_MINUTE`) |
+
+> 📌 Воркер exempt от демо-квоты — аутентифицируется `X-Worker-Token`, не
+> `X-Demo-Token` (создаёт AI-ответ через тот же `POST /api/reviews`). Guard
+> `require_demo_or_worker` в `routes.py` допускает любой из двух токенов.
+
+> 📌 Таблицы observability и `demo_sessions` создаются `Base.metadata.create_all`
+> в lifespan сайта (Alembic не используется — idempotent для существующей БД демо).
 
 ---
 
@@ -105,8 +123,10 @@ Threaded-структура: ответ воркера — это строка `
 
 ```mermaid
 flowchart TD
-    C([Клиент]) -->|POST /api/reviews| S[review-site]
-    S -->|insert status=new| DB[(PostgreSQL)]
+    C([Клиент]) -->|POST /api/demo/start| S[review-site]
+    S -->|DemoSession token+limit=5| DB[(PostgreSQL)]
+    C -->|POST /api/reviews X-Demo-Token| S
+    S -->|require_demo_or_worker guard · insert status=new| DB
     W[review-worker] -->|GET /api/reviews?status=new| S
     S -->|только new| W
     W -->|POST /api/executions start| S
@@ -115,7 +135,7 @@ flowchart TD
     W -->|Telegram notify опционально| T([Оператор])
     W -->|build_provider runtime-config| P[LLM-провайдер]
     P -->|ответ + meta| W
-    W -->|POST /api/reviews parent_id| S
+    W -->|POST /api/reviews parent_id X-Worker-Token exempt| S
     S -->|insert ответ status=new| DB
     W -->|PATCH /api/reviews/{id} X-Worker-Token status=processed| S
     W -->|PATCH ответа status=processed| S

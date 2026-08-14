@@ -1,7 +1,7 @@
-# 🤖 EXTERNAL_PROVIDERS.md — Review Auto Responder · LLM-провайдеры
+# 🤖 EXTERNAL_PROVIDERS.md — Review Auto Responder
 
 **Проект:** review-auto-responder
-**Дата:** 2026-08-13
+**Дата:** 2026-08-14
 **Статус:** исследовательская справка. Source of Truth — официальные доки провайдеров + код адаптеров (правило: внешняя интеграция — официальная документация, не память модели).
 
 Оба провайдера унифицированы на **Chat Completions** (`/chat/completions`, сообщения `system`+`user`). Legacy использовал OpenAI `responses.create`; доработка переводит всё на Chat Completions ради единой абстракции `ResponseProvider`.

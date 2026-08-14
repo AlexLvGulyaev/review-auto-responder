@@ -1,8 +1,7 @@
 # 🚀 DEPLOYMENT_GUIDE.md — Review Auto Responder
 
 **Проект:** review-auto-responder
-**Дата создания:** 2026-08-13
-**Последнее обновление:** 2026-08-14
+**Дата:** 2026-08-14
 **Статус:** Source of Truth воспроизводимости развёртывания.
 
 > 📌 **SOT-дисциплина:** этот документ — единственный источник истины процесса развёртывания. Критерий качества — **успешное развёртывание по инструкции**, а не качество текста. Если после полного выполнения система не работоспособна — документ не актуален. Валидация — запуском в чистом окружении (см. [✅ DEPLOYMENT_VALIDATION_REPORT.md](DEPLOYMENT_VALIDATION_REPORT.md)).
@@ -15,6 +14,7 @@
 |------------|--------|----------|
 | Docker Engine | 24+ | `docker --version` |
 | Docker Compose | v2 (plugin) | `docker compose version` |
+| PostgreSQL | 16 (образ `postgres:16-alpine` в compose) | поднимается `docker compose up` — отдельная установка не требуется |
 | ОС | Linux / macOS / Windows+WSL2 | — |
 | RAM | ≥ 1 ГБ свободной | — |
 | Порты | `8000` (сайт) свободен | `curl -I http://localhost:8000` (должен быть connection refused) |
@@ -54,12 +54,18 @@ cp .env.example .env
 | `DEMO_MAX_SESSIONS_PER_IP_PER_HOUR` | нет | Лимит сессий с одного IP в час (по умолчанию `5`) |
 | `OPENAI_API_KEY` | один из провайдеров | OpenAI |
 | `GIGACHAT_AUTH_KEY` | один из провайдеров | GigaChat |
+| `GIGACHAT_BASE_URL` | нет | Базовый URL GigaChat API (по умолчанию `https://gigachat.devices.sberbank.ru/api/v1`; override — только для кастомного endpoint) |
+| `GIGACHAT_TOKEN_URL` | нет | URL OAuth-обмена GigaChat (по умолчанию `https://ngw.devices.sberbank.ru:9443/api/v2/oauth`) |
+| `GIGACHAT_SCOPE` | нет | OAuth-scope GigaChat (по умолчанию `GIGACHAT_API_PERS`) |
+| `GIGACHAT_CA_BUNDLE` | нет | Путь к CA-bundle Минцифры; пусто = проверка сертификата отключена (dev/demo); на production укажите путь |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_USER_CHAT_ID` | нет | Уведомления оператору (без них — пропуск) |
 | `APP_PORT` | нет | Порт сайта на хосте (по умолчанию `8000`) |
 | `WORKER_API_PORT` | нет | Внутренний test-API воркера для кнопки «Проверить» (по умолчанию `8001`, **не публикуется на хост**) |
 | `WORKER_TEST_URL` | нет | Адрес внутреннего test-API воркера для сайта (по умолчанию `http://review-worker:8001`; задаётся в compose) |
 | `WORKER_POLL_INTERVAL` | нет | Интервал опроса, сек (по умолчанию `10`) |
+| `WORKER_HEALTHCHECK_MAX_AGE` | нет | Порог freshness heartbeat для Docker healthcheck воркера, сек (по умолчанию `60`; internal) |
 | `LOG_LEVEL` | нет | Уровень stdout-логирования обоих сервисов (`DEBUG`/`INFO`/`WARNING`/...; по умолчанию `INFO`) |
+| `AI_AUTHOR_NAME` | нет | Имя автора AI-ответов (по умолчанию `AI Support`); также защита от self-reply — воркер не отвечает на собственные ответы |
 
 > 📌 **Демо-лимиттер (публичная форма).** `DEMO_*` — не секреты, дефолты рабочих
 > значений подходят для публичного демо. Посетитель получает короткоживущий
@@ -170,6 +176,12 @@ curl -s "http://localhost:8000/api/reviews?status=new" | python3 -m json.tool
 
 ## 🖥️ 5. Операторская панель `/admin`
 
+> 📌 **Операторское руководство** `/admin` — [🎛️ `OPERATOR_GUIDE.md`](OPERATOR_GUIDE.md):
+> вход (полный/демо), смена провайдера и промпта без рестарта, кнопка «Проверить»,
+> состояние системы, observability (Логи/Аудит). Раздел ниже — **smoke-проверки для
+> Deployment Validation**: демо-RBAC (§5.3), демо-лимиттер (§5.4), доступ к панелям
+> (§5.5); §5.1–5.2.2 иллюстрируют вход и конфиг-консоль скриншотами.
+
 ### 🖥️ 5.1. Вход и структура
 
 Откройте `http://localhost:8000/admin` → форма ввода токена (тёмная страница входа).
@@ -223,7 +235,7 @@ curl -s "http://localhost:8000/api/reviews?status=new" | python3 -m json.tool
 LLM (1-токенный тест) через внутренний test-API воркера (`POST /provider-test`,
 порт `WORKER_API_PORT`, **не публикуется на хост**, защищён `X-Worker-Token`). Сайт
 проксирует запрос (`POST /admin/test-provider`, `require_admin` — demo → `403`).
-Результат — flash-сообщение: «GigaChat: готов, 663мс, 1ток» (или ошибка). LLM-ключи
+Результат — flash-сообщение: «GigaChat: готов, ~500мс, ~25ток» (пример; или ошибка). LLM-ключи
 остаются на воркере — сайт их не получает. Событие пишется в аудит (`admin.provider_test`).
 
 ![Toast-результат real-теста провайдера: готов, latency, токены](screenshots/RAR_admin_provider_test.png)

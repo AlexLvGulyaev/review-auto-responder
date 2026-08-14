@@ -1,8 +1,7 @@
 # 🎛️ OPERATOR_GUIDE.md — Review Auto Responder
 
 **Проект:** review-auto-responder
-**Дата создания:** 2026-08-14
-**Последнее обновление:** 2026-08-14
+**Дата:** 2026-08-14
 **Статус:** Руководство оператора: как менять поведение системы без программирования, пересборки и рестарта контейнера.
 
 > 🌐 Адреса: живое демо — `https://review-auto-responder.alex-n8n.site/admin`;
@@ -101,8 +100,8 @@ fallback=openai model=GigaChat-Max`; ответ сгенерирован чер�
    `WORKER_API_PORT`, **не публикуется на хост**, защищён `X-Worker-Token`).
 3. Воркер делает 1-токенный real-вызов LLM и возвращает `{ok, provider, model,
    latency_ms, tokens, message}`.
-4. Появляется нижний toast-flash: «✓ Проверка «gigachat»: готов, 474мс, 25ток»
-   (или сообщение об ошибке).
+4. Появляется нижний toast-flash: «✓ Проверка «gigachat»: готов, ~500мс, ~25ток»
+   (пример; или сообщение об ошибке).
 
 ![Toast-результат real-теста провайдера: готов, latency, токены](screenshots/RAR_admin_provider_test.png)
 

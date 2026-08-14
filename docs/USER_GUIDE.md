@@ -1,7 +1,8 @@
-# 📖 Review Auto Responder — руководство пользователя сайта
+# 📖 USER_GUIDE.md — Review Auto Responder
 
 **Проект:** review-auto-responder
 **Дата:** 2026-08-14
+**Статус:** User Layer — руководство посетителя публичного сайта отзывов.
 
 🌐 **Живое демо:** [▶️ Открыть сайт отзывов](https://review-auto-responder.alex-n8n.site)
 

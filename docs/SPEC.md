@@ -1,10 +1,9 @@
-# 📋 SPEC.md — Продуктовая спецификация Review Auto Responder
+# 📄 SPEC.md — Продуктовая спецификация Review Auto Responder
 
 **Проект:** review-auto-responder
 **Версия:** 1.0
-**Дата создания:** 2026-08-13
-**Последнее обновление:** 2026-08-14
-**Статус:** Draft — на утверждении перед IMPLEMENTATION_PLAN
+**Дата:** 2026-08-14
+**Статус:** Frozen baseline v1.0
 
 > 🧊 **Frozen baseline v1.0.** Этот SPEC зафиксирован как продуктовый baseline
 > версии 1.0. Дальнейшая эволюция системы (observability v1.1, AIP Dark v1.2,
@@ -235,11 +234,11 @@ Review Auto Responder — автономный ассистент, которы�
 
 ## 📚 9. Связанные документы
 
-- [🏠 `README.md`](../README.md) — главная страница проекта (предстоит).
+- [🏠 `README.md`](../README.md) — главная страница проекта.
 - [📊 `docs/PROJECT_STATE.md`](PROJECT_STATE.md) — паспорт состояния проекта.
-- [📋 `docs/IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) — технический план реализации (предстоит).
-- [🏗️ `docs/ARCHITECTURE.md`](ARCHITECTURE.md) — архитектура и путь данных (предстоит).
-- [🚀 `docs/DEPLOYMENT_GUIDE.md`](DEPLOYMENT_GUIDE.md) — развёртывание с нуля (предстоит).
+- [📋 `docs/IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) — технический план реализации.
+- [🏗️ `docs/ARCHITECTURE.md`](ARCHITECTURE.md) — архитектура и путь данных.
+- [🚀 `docs/DEPLOYMENT_GUIDE.md`](DEPLOYMENT_GUIDE.md) — развёртывание с нуля.
 
 ---
 

@@ -1,9 +1,9 @@
-# 📊 Review Auto Responder · PROJECT_STATE
+# 📊 PROJECT_STATE.md — Review Auto Responder
 
 **Проект:** review-auto-responder
 **Дата создания:** 2026-08-13
 **Последнее обновление:** 2026-08-14
-**Статус:** ✅ Портфельный актив. Реализован, прошёл Deployment Validation (17/17 PASS), опубликован как публичный репозиторий с живым демо. v1.5: демо-стандарт входа в админку + сессионные ограничения сайта отзывов.
+**Статус:** ✅ Портфельный актив. Реализован, прошёл Deployment Validation (18/18 PASS), опубликован как публичный репозиторий с живым демо. v1.5: демо-стандарт входа в админку + сессионные ограничения сайта отзывов.
 
 ---
 
@@ -36,7 +36,7 @@
 
 ## 📊 2. Current Status
 
-**Стадия:** ✅ Портфельный актив (публичное демо). Доработка реализована (site + worker + единый compose + `/admin` runtime-config + демо-RBAC + мультипровайдерность + промпт-в-файле + три контура observability), Deployment Validation пройдена в чистом окружении (17/17 PASS), публичный репозиторий опубликован (github.com/AlexLvGulyaev/review-auto-responder), живое демо развёрнуто за обратным прокси (Traefik, TLS) по адресу https://review-auto-responder.alex-n8n.site (ответы генерируются через GigaChat).
+**Стадия:** ✅ Портфельный актив (публичное демо). Доработка реализована (site + worker + единый compose + `/admin` runtime-config + демо-RBAC + мультипровайдерность + промпт-в-файле + три контура observability), Deployment Validation пройдена в чистом окружении (18/18 PASS), публичный репозиторий опубликован (github.com/AlexLvGulyaev/review-auto-responder), живое демо развёрнуто за обратным прокси (Traefik, TLS) по адресу https://review-auto-responder.alex-n8n.site (ответы генерируются через GigaChat).
 
 ### ✅ Завершённые задачи
 
@@ -142,7 +142,7 @@
 3. ~~Реализовать доработанную версию~~ — сайт + обработчик.
 4. ~~Единый `docker-compose.yml` + `DEPLOYMENT_GUIDE.md` + `/health`~~.
 5. ~~`docs/ARCHITECTURE.md`~~ — архитектура пути данных зафиксирована.
-6. ~~Deployment Validation в чистом окружении~~ — 17/17 PASS.
+6. ~~Deployment Validation в чистом окружении~~ — 18/18 PASS.
 7. ~~Публичный репозиторий + живое демо~~ — github.com/AlexLvGulyaev/review-auto-responder, https://review-auto-responder.alex-n8n.site.
 8. ~~Observability~~ — три контура реализованы и верифицированы.
 9. ~~Демо-стандарт входа в админку~~ — одно-кликовой демо-вход (`POST /admin/login/demo`, сервер ставит cookie, токен не попадает в браузер); страница входа в стиле AIP Dark с двумя путями.
@@ -184,6 +184,7 @@
 | 2026-08-13 | Конфиг-консоль v1.3 | Двухколоночный лэйаут конфиг-консоли (карточки провайдеров OpenAI/GigaChat слева, промпт справа); ряд состояния системы — 5 плиток (PostgreSQL/Воркер/LLM/Telegram/API); per-provider модели (`gigachat_model`); Yandex-провайдер убран из кода и docs |
 | 2026-08-13 | Конфиг-консоль v1.4 | Паритет с эталонной Admin Console: единый статический хидер «Admin Console» + зелёный «Zerocoder»; role-бейдж в сайдбаре; per-console page-header. Две панели («Настройки LLM и провайдера» | «Системный промпт») side-by-side; карточки провайдеров слева направо со всеми параметрами (Base URL/Model/Temperature/Max tokens/Включён/Проверить); active/fallback LLM-chain; тултипы вместо inline-текстов; шрифты выровнены под эталон. Внутренний test-API воркера (`worker/api.py`, stdlib asyncio, порт 8001 не публикуется) + site-proxy `/admin/test-provider` — real-тест «Проверить» без передачи ключей на сайт |
 | 2026-08-14 | v1.5: demo-standard + session limits | Две оставшиеся «обязи» v1.0 закрыты. **Фича A — демо-стандарт входа в админку:** одно-кликовой демо-вход (`POST /admin/login/demo`) — сервер сам ставит cookie с `ADMIN_DEMO_TOKEN`, токен не попадает в браузер (строже, чем запекание в SPA-бандл); страница входа `admin_login.html` в стиле AIP Dark с двумя путями (токен / демо-кнопка), `?error=demo_unavailable` если demo-токен не задан; audit `admin.login_success role=demo details.entry=demo_button`. **Фича B — сессионные ограничения сайта отзывов:** токенизированный демо-лимиттер с квотой на публичный `POST /api/reviews` — модель `DemoSession` + `DemoLimiterService` (3 уровня: sessions/IP/час, rate-limit, квота 5/сессию), `POST /api/demo/start` + `GET /api/demo/status`, транспорт header `X-Demo-Token` + localStorage; воркер exempt по `X-Worker-Token` (создаёт AI-ответ через тот же эндпоинт — `worker/client.py` теперь шлёт X-Worker-Token на POST); guard `require_demo_or_worker` в routes.py; UI-бейдж «Демо: осталось N из 5», блокировка формы при 0. `DEMO_ENABLED=true` (дефолт публичного демо), env-tunable `DEMO_*`. Таблица `demo_sessions` создаётся через `Base.metadata.create_all` (additive, без Alembic). Верифицировано end-to-end: start 200+token/limit=5, status 200/401, квота 5×201 (X-Demo-Remaining 4→0) + 6-й 429, rate-limit 429, worker-exempt 201, regression GET 200/PATCH 401. Документация актуализирована (SECURITY_NOTES §3-4/§6, DEPLOYMENT_GUIDE env+§5.3/§5.4, .env.example). Визуальная проверка UI — глазами пользователя (модель GLM скриншоты не открывает) |
+| 2026-08-14 | Пере-Deployment Validation v1.5 | Чистое окружение (compose-project `rar-val`, APP_PORT=8012): 18/18 PASS — demo-стандарт входа + сессионные лимиты верифицированы повторно; живое демо не затронуто, teardown выполнен |
 
 ---
 

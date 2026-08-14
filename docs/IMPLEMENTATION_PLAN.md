@@ -1,8 +1,8 @@
-# 📋 Review Auto Responder · IMPLEMENTATION_PLAN
+# 📋 IMPLEMENTATION_PLAN.md — Review Auto Responder
 
 **Проект:** review-auto-responder
-**Дата:** 2026-08-13
-**Статус:** ✅ Реализован. Технический план доработанной версии на базе legacy-репозиториев-референсов (`github.com/MrGAN12009/worker_ai`, `app_test_2803`). Все этапы выполнены, Deployment Validation 17/17 PASS.
+**Дата:** 2026-08-14
+**Статус:** ✅ Реализован. Технический план доработанной версии на базе legacy-репозиториев-референсов (`github.com/MrGAN12009/worker_ai`, `app_test_2803`). Все этапы выполнены, Deployment Validation 18/18 PASS.
 
 ---
 
@@ -53,16 +53,19 @@ flowchart TD
 | Компонент | Файл | Назначение |
 |-----------|------|------------|
 | Точка входа | `app/main.py` | FastAPI app, lifespan (idempotent init схемы), router |
-| Роуты | `app/api/routes.py` | `GET /`, `GET /api/reviews` (+`?status=new`), `POST /api/reviews`, `PATCH /api/reviews/{id}`, `GET /health` |
+| Роуты | `app/api/routes.py` | `GET /`, `GET /api/reviews` (+`?status=new`), `POST /api/reviews` (guard `require_demo_or_worker`: демо-токен с квотой ИЛИ `X-Worker-Token`), `PATCH /api/reviews/{id}`, `GET /health` |
 | Админка | `app/api/admin.py` | Демо-RBAC: два токена (admin/demo), role-based guard на backend (`AdminIdentity` role admin/demo, `admin_auth` чтение + `require_admin` мутация → 403 для demo), login/logout по cookie; `GET/POST /admin` пишет `config.json` |
 | Execution-трейсы | `app/api/executions.py` | `POST /api/executions` (start), `PATCH /api/executions/{id}` (finish) — воркер пишет трассы под `X-Worker-Token` |
 | Admin-трейсы | `app/api/admin_executions.py` | `GET /admin/executions`, `GET /admin/executions/{id}` — read-only просмотр (demo допущен) |
 | Audit-API | `app/api/audit.py` | `GET /admin/audit`, `GET /admin/audit/{id}` — read-only просмотр журнала (demo допущен) |
+| Демо-сессии | `app/api/demo.py` | `POST /api/demo/start` (выпуск `X-Demo-Token`, IP-лимит сессий/час), `GET /api/demo/status` (квота по токену) — v1.5 |
+| Консоль состояния | `app/api/admin_status.py` | `GET /admin/status` — read-only сводка здоровья: `overall` + БД-проба (`SELECT 1`) + метрики + liveness воркера (`status.json`) + статус провайдеров; `build_system_status` переиспользуется в `/admin` |
+| Демо-лимиттер | `app/services/demo_limiter.py` | `DemoLimiterService` — 3 уровня (sessions/IP/час, rate-limit-интервал, квота 5/сессию); воркер exempt по `X-Worker-Token`; backend — единственный SOT квоты — v1.5 |
 | Worker-auth | `app/api/worker_auth.py` | `require_worker_token` → 401 + audit `auth.worker_denied` при плохом/отсутствующем токене |
 | Audit-сервис | `app/services/audit.py` | `AuditService.log_audit` + `client_ip` (X-Forwarded-For → X-Real-IP → client.host) |
 | Logging | `app/core/logging.py` | `configure_logging()` через dictConfig, уровень `LOG_LEVEL` |
-| Схемы | `app/schemas.py` | `ReviewCreate`, `ReviewRead`, `ReviewUpdate`, `RuntimeConfigUpdate`, execution/audit схемы (Pydantic) |
-| Модели БД | `app/models/review.py`, `execution.py`, `audit.py` | `Review` (самоссылка), `ExecutionSession`+`ExecutionStep`, `AuditLog` |
+| Схемы | `app/schemas.py` | `ReviewCreate`, `ReviewRead`, `ReviewUpdate`, `RuntimeConfigUpdate`, execution/audit/demo схемы (Pydantic) |
+| Модели БД | `app/models/review.py`, `execution.py`, `audit.py`, `demo_session.py` | `Review` (самоссылка), `ExecutionSession`+`ExecutionStep`, `AuditLog`, `DemoSession` (v1.5) |
 | Сессия БД | `app/db/session.py` | async engine, session factory, `get_db_session` |
 | Базовый класс | `app/db/base.py` | `DeclarativeBase` |
 | Конфиг | `app/config.py` | Pydantic-settings из `.env`, `database_url` computed, `admin_token`, `admin_demo_token`, `admin_auth_enabled`, `runtime_config_path`, `log_level` |
@@ -105,73 +108,41 @@ flowchart TD
 
 ## 📐 3. Модель данных
 
-### 3.1. `reviews` — отзыв/комментарий (сайт, PostgreSQL)
+### 3.1. БД-таблицы (сайт, PostgreSQL)
 
-| Поле | Тип | Описание |
-|------|-----|----------|
-| `id` | `Integer` PK | Идентификатор |
-| `parent_id` | `Integer` FK→`reviews.id` \| null | Родитель (для вложенных комментариев) |
-| `name` | `String(255)` \| null | Имя автора |
-| `text` | `Text` | Текст отзыва |
-| `status` | `Enum(new, processed)` | Статус обработки; default `new` |
-| `response` | `Text` \| null | Зарезервировано (legacy-поле; ответ публикуется дочерним комментарием) |
-| `tone` | `String(32)` \| null | Тон: positive/negative/neutral (ставит обработчик) |
-| `created_at` | `DateTime(tz)` | Время создания |
+Создаются `Base.metadata.create_all` в lifespan сайта (без Alembic — idempotent
+для существующей БД демо). Подробная схема полей — в
+[🏗️ `docs/ARCHITECTURE.md`](ARCHITECTURE.md) §3:
 
-### 3.2. `execution_sessions` — трасса обработки отзыва (observability, контур 2)
+- `reviews` — отзыв/комментарий (самоссылка `parent_id`, `status` new/processed,
+  `tone`; `response` — legacy-зарезервировано, ответ публикуется дочерним комментарием).
+- `execution_sessions` + `execution_steps` — execution-tracing, контур 2
+  (статус/провайдер/модель/длительность + стадии пайплайна с LLM-метаданными).
+- `audit_logs` — журнал admin/security-событий, контур 3.
+- `demo_sessions` (v1.5) — токенизированная демо-квота на `POST /api/reviews`:
+  `token` (`X-Demo-Token`), `session_id`, `client_ip`, `requests_used`/`requests_limit`
+  (default `DEMO_MAX_REQUESTS_PER_SESSION`=5), `is_active`, `created_at`, `expires_at`
+  (`DEMO_SESSION_TTL_MINUTES`=30), `last_request_at`. Воркер exempt по `X-Worker-Token`.
 
-| Поле | Тип | Описание |
-|------|-----|----------|
-| `id` | `Integer` PK | Идентификатор сессии |
-| `review_id` | `Integer` FK→`reviews.id` (SET NULL) \| null | Обрабатываемый отзыв |
-| `status` | `String(32)` | `started`/`ok`/`error` |
-| `route` | `String(64)` | Маршрут (`review_processing`) |
-| `provider_key` | `String(64)` \| null | LLM-провайдер |
-| `model_name` | `String(128)` \| null | Имя модели |
-| `duration_ms` | `Integer` \| null | Длительность обработки |
-| `started_at` / `finished_at` | `DateTime(tz)` | Время старта/финала |
-| `execution_metadata` | `JSONB` | Метаданные сессии (`reply_id`, `error`, ...) |
+> 📌 Дублирование схемы БД между планом и архитектурой устранено: ARCHITECTURE §3 —
+> единственный SOT описания полей; IMPLEMENTATION_PLAN §3 — только перечень и
+> назначение (ссылка).
 
-### 3.3. `execution_steps` — стадии пайплайна
-
-| Поле | Тип | Описание |
-|------|-----|----------|
-| `id` | `Integer` PK | Идентификатор шага |
-| `execution_session_id` | `Integer` FK→`execution_sessions.id` (CASCADE) | Родительская сессия |
-| `stage_name` | `String(64)` | `detect_tone`/`telegram`/`llm_call`/`persist_reply`/`mark_processed` |
-| `step_order` | `Integer` | Порядок шага |
-| `status` | `String(32)` | `ok`/`error`/`skipped` |
-| `started_at` / `finished_at` | `DateTime(tz)` \| null | Тайминг шага |
-| `duration_ms` | `Integer` \| null | Длительность шага |
-| `step_metadata` | `JSONB` | Для `llm_call`: `{provider, model, latency_ms, tokens, fallback_reason}` |
-
-### 3.4. `audit_logs` — журнал admin/security-событий (observability, контур 3)
-
-| Поле | Тип | Описание |
-|------|-----|----------|
-| `id` | `Integer` PK | Идентификатор записи |
-| `user_id` / `user_name` / `user_role` | `String` \| null | Кто совершил действие |
-| `action` | `String(64)` | `admin.login_success`/`admin.login_failed`/`admin.config_update`/`admin.rbac_denied`/`auth.worker_denied` |
-| `resource_type` / `resource_id` | `String` \| null | Над чем совершено |
-| `ip_address` | `String(45)` \| null | Откуда (X-Forwarded-For → X-Real-IP → client.host) |
-| `details` | `JSONB` | Контекст (без секретов и полных промптов) |
-| `created_at` | `DateTime(tz)` | Время события |
-
-### 3.5. `state.json` — локальное состояние обработчика
+### 3.2. `state.json` — локальное состояние обработчика
 
 | Поле | Тип | Описание |
 |------|-----|----------|
 | `notified_review_ids` | `list[int]` | Отзывы, по которым уже отправлено Telegram-уведомление |
 | `processed_review_ids` | `list[int]` | Отзывы, по которым уже сгенерирован ответ (defensive guard) |
 
-### 3.6. `heartbeat.json` — healthcheck обработчика
+### 3.3. `heartbeat.json` — healthcheck обработчика
 
 | Поле | Тип | Описание |
 |------|-----|----------|
 | `last_iteration_at` | `str` (ISO) | Метка времени последней итерации цикла |
 | `target_site_url` | `str` | Целевой сайт (для диагностики) |
 
-### 3.7. `config.json` — runtime-config (shared volume, пишется `/admin`)
+### 3.4. `config.json` — runtime-config (shared volume, пишется `/admin`)
 
 | Поле | Тип | Описание |
 |------|-----|----------|
@@ -201,6 +172,7 @@ flowchart TD
 |------------|----------|-----|
 | Сайт ↔ обработчик | `GET /api/reviews?status=new`, `POST /api/reviews`, `PATCH /api/reviews/{id}` + `X-Worker-Token` | `docs/API_CONTRACT.md` + код сайта |
 | Воркер → execution-tracing | `POST /api/executions` (start), `PATCH /api/executions/{id}` (finish) + `X-Worker-Token` | `docs/API_CONTRACT.md` + код `executions.py` |
+| Публичное демо (v1.5) | `POST /api/demo/start`, `GET /api/demo/status` + `X-Demo-Token`; воркер exempt по `X-Worker-Token` | `docs/API_CONTRACT.md` §1.6 + код `demo.py` |
 | `/admin` → обработчик | Сайт пишет `config.json` в shared volume; обработчик читает по mtime (hot-reload, без рестарта) | `docs/ARCHITECTURE.md` + код `runtime_config.py` |
 | OpenAI | Chat Completions (`/v1/chat/completions`), `Authorization: Bearer` | `docs/EXTERNAL_PROVIDERS.md` |
 | GigaChat | OAuth-обмен auth_key→access_token (`/oauth`), `/chat/completions`, сертификат Минцифры | адаптер `gigachat_provider.py` (SOT — код + доки GigaChat) |
@@ -240,12 +212,14 @@ flowchart TD
 - [x] `/admin` меняет провайдер/модель/temperature/max_tokens/промпт в runtime — применяется на следующем цикле опроса без рестарта обработчика.
 - [x] «Проверить» — real-тест провайдера через внутренний test-API воркера (порт `WORKER_API_PORT`, не публикуется); сайт проксирует, LLM-ключи остаются на воркере; demo → 403; аудит `admin.provider_test`.
 - [x] Демо-RBAC: `ADMIN_DEMO_TOKEN` → чтение `/admin` разрешено, POST `/admin`/`/admin/test-provider` → 403 (backend guard); `ADMIN_TOKEN` → мутации разрешены.
+- [x] Демо-стандарт входа в `/admin` (v1.5): одно-кликовой demo-login `POST /admin/login/demo` — сервер ставит cookie с `ADMIN_DEMO_TOKEN`, токен не попадает в браузер; demo-RBAC — чтение разрешено, мутации → 403.
+- [x] Сессионные ограничения сайта отзывов (v1.5): токенизированный демо-лимиттер (`DemoSession` + `DemoLimiterService`, 3 уровня) на `POST /api/reviews`; `POST /api/demo/start` + `GET /api/demo/status`, header `X-Demo-Token`; воркер exempt по `X-Worker-Token`.
 - [x] Промпт — файл-SOT на shared volume (`system_prompt.md`, bootstrap из вшитого `prompts/v1/system.md`); правка через `/admin` перезаписывает файл и влияет на ответ без правки кода.
 - [x] Секреты (ключи API) только в `.env`; `config.json` содержит только runtime-параметры.
 - [x] Self-reply предотвращён (обработчик не отвечает на собственные ответы).
 - [x] Telegram-уведомление при настроенном токене; пропуск без него.
 - [x] Секреты в `.env` (не в репозитории); `.env.example` с placeholder'ами.
-- [x] Deployment Validation пройдена в чистом окружении (отчёт 17/17 PASS).
+- [x] Deployment Validation пройдена в чистом окружении (отчёт 18/18 PASS).
 - [x] Observability: stdout-логирование (`LOG_LEVEL`), execution-tracing (`/admin/executions` с LLM-метриками), аудит (`/admin/audit`).
 - [x] Публичная документация самодостаточна (нет ссылок на документы, отсутствующие в репозитории).
 
