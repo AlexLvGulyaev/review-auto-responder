@@ -57,7 +57,7 @@ cp .env.example .env
 | `GIGACHAT_BASE_URL` | нет | Базовый URL GigaChat API (по умолчанию `https://gigachat.devices.sberbank.ru/api/v1`; override — только для кастомного endpoint) |
 | `GIGACHAT_TOKEN_URL` | нет | URL OAuth-обмена GigaChat (по умолчанию `https://ngw.devices.sberbank.ru:9443/api/v2/oauth`) |
 | `GIGACHAT_SCOPE` | нет | OAuth-scope GigaChat (по умолчанию `GIGACHAT_API_PERS`) |
-| `GIGACHAT_CA_BUNDLE` | нет | Путь к CA-bundle Минцифры; пусто = проверка сертификата отключена (dev/demo); на production укажите путь |
+| `GIGACHAT_CA_BUNDLE` | нет | Путь к CA-bundle Минцифры. Пусто/не задано = используется `certs/russian_trusted_ca_bundle.pem` (Russian Trusted Root CA, входит в состав репозитория, монтируется compose в `/certs/`), проверка сертификата включена. Отключить проверку (только dev) — задать заведомо несуществующий путь: адаптер предупредит в логах и продолжит с `ssl.CERT_NONE` |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_USER_CHAT_ID` | нет | Уведомления оператору (без них — пропуск) |
 | `APP_PORT` | нет | Порт сайта на хосте (по умолчанию `8000`) |
 | `WORKER_API_PORT` | нет | Внутренний test-API воркера для кнопки «Проверить» (по умолчанию `8001`, **не публикуется на хост**) |
@@ -476,7 +476,7 @@ curl -i https://review-auto-responder.example.com/health    # → 200 {"status":
 
 - **TLS / публичный домен:** обратный прокси терминирует TLS; `/admin` — только через HTTPS.
 - **Секреты:** уникальные `WORKER_API_TOKEN`/`ADMIN_TOKEN`/`ADMIN_DEMO_TOKEN` (не демо-значения).
-- **GigaChat TLS:** `GIGACHAT_CA_BUNDLE` (Russian Trusted Root CA) вместо `ssl.CERT_NONE` — на production не отключайте проверку сертификата.
+- **GigaChat TLS:** проверка сертификата включена из коробки — compose монтирует `certs/russian_trusted_ca_bundle.pem` (Russian Trusted Root CA и Russian Trusted Sub CA; источник gu-st.ru) и подставляет путь в `GIGACHAT_CA_BUNDLE` автоматически. Отпечатки SHA-256 для сверки: Root CA `D2:6D:2D:02:31:B7:C3:9F:92:CC:73:85:12:BA:54:10:35:19:E4:40:5D:68:B5:BD:70:3E:97:88:CA:8E:CF:31`, Sub CA `BB:BD:E2:10:3E:79:0B:99:9E:C6:2B:D0:3C:F6:25:A5:A2:E7:C3:16:E1:0A:FE:6A:49:0E:ED:EA:D8:B3:FD:9B`. Не отключайте проверку на production (см. таблицу §3).
 - **Публичная форма:** `POST /api/reviews` ограничен токенизированной демо-сессией с квотой (`DEMO_*`, см. §5.4 и `SECURITY_NOTES.md` §4). На публичном инстансе держите `DEMO_ENABLED=true`; подберите `DEMO_MAX_REQUESTS_PER_SESSION` под допустимый расход (1 POST = 1 LLM-генерация).
 - **БД:** резервное копирование `db-data` volume.
 - **Telegram:** заполните `TELEGRAM_BOT_TOKEN` + `TELEGRAM_USER_CHAT_ID` для уведомлений оператору.
