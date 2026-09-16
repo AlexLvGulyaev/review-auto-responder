@@ -4,6 +4,16 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}Админка · Review Auto Responder{% endblock %}</title>
+  <script>
+    // Тема применяется синхронно до CSS — без вспышки тёмной при светлом
+    // выборе. Ключ `ai-theme` общий с консолями RF/AIC (выбор на браузер).
+    try {
+      document.documentElement.dataset.theme =
+        localStorage.getItem('ai-theme') === 'light' ? 'light' : 'dark';
+    } catch (e) {
+      document.documentElement.dataset.theme = 'dark';
+    }
+  </script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700&display=swap');
 
@@ -31,6 +41,43 @@
       --ai-font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
       --ai-sidebar-width: 260px;
     }
+
+    /* Светлая тема — lab-эталон RF (белая земля + голубые панели, mirror-
+       inversion токенов; владелец, 30.08). Значения — из карты RF. */
+    :root[data-theme='light'] {
+      --ai-bg: #ffffff;
+      --ai-surface: #e7ebf3;
+      --ai-surface-hover: #dfe5ef;
+      --ai-surface-elevated: #eef1f8;
+      --ai-input: #f4f6fa;
+      --ai-text: #16202f;
+      --ai-text-secondary: #33415a;
+      --ai-text-muted: #5a6880;
+      --ai-primary: #2563eb;
+      --ai-primary-hover: #1d4ed8;
+      --ai-primary-light: rgba(37, 99, 235, 0.12);
+      --ai-teal: #0d9488;
+      --ai-success: #15803d;
+      --ai-error: #dc2626;
+      --ai-warning: #b45309;
+      --ai-border: #97a5bd;
+      --ai-border-subtle: #c3ccdc;
+      --ai-shadow: 0 4px 12px rgba(15, 23, 42, 0.12);
+    }
+
+    /* Светлая тема: софт-подложки статусов и белые тинты поверх тёмной земли —
+       на белой земле их меняют на тёмные тинты тех же семантических цветов. */
+    :root[data-theme='light'] .ai-status--ok,
+    :root[data-theme='light'] .ai-sidebar__badge--admin,
+    :root[data-theme='light'] .ai-badge--admin { background-color: rgba(21, 128, 61, 0.10); }
+    :root[data-theme='light'] .ai-status--error { background-color: rgba(220, 38, 38, 0.10); }
+    :root[data-theme='light'] .ai-status--warning,
+    :root[data-theme='light'] .ai-sidebar__badge--demo,
+    :root[data-theme='light'] .ai-badge--demo { background-color: rgba(180, 83, 9, 0.10); }
+    :root[data-theme='light'] .ai-status--muted { background-color: rgba(90, 104, 128, 0.10); }
+    :root[data-theme='light'] .ai-metric,
+    :root[data-theme='light'] .ai-provider-card { background-color: rgba(15, 23, 42, 0.03); }
+    :root[data-theme='light'] code { background: rgba(15, 23, 42, 0.06); }
 
     * { box-sizing: border-box; }
 
@@ -116,7 +163,9 @@
       border: 1px solid var(--ai-border); border-radius: var(--ai-radius);
       padding: 10px 12px; cursor: pointer; font-size: 0.875rem;
       display: flex; align-items: center; gap: 10px;
+      font-family: var(--ai-font-body);
     }
+    #theme-toggle { margin-bottom: 8px; }
     .ai-sidebar__logout:hover { color: var(--ai-text); border-color: var(--ai-text-muted); background-color: var(--ai-surface-hover); }
     .ai-sidebar__site { display: block; margin-top: 8px; padding: 10px 12px; border-radius: var(--ai-radius); color: var(--ai-text-muted); font-size: 0.8125rem; }
     .ai-sidebar__site:hover { color: var(--ai-text); background-color: var(--ai-surface-hover); text-decoration: none; }
@@ -215,6 +264,8 @@
       text-transform: uppercase; letter-spacing: 0.02em;
     }
     .ai-status::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background-color: currentColor; }
+    /* Контрактный чип-значок: эмодзи вместо точки — AIC parity (ai-status--emoji). */
+    .ai-status--emoji::before { display: none; }
     .ai-status--ok { background-color: rgba(34,197,94,0.12); color: var(--ai-success); }
     .ai-status--error { background-color: rgba(239,68,68,0.12); color: var(--ai-error); }
     .ai-status--warning { background-color: rgba(245,158,11,0.12); color: var(--ai-warning); }
@@ -472,8 +523,9 @@
       {% endif %}
 
       <nav class="ai-nav">
+        {# Меню-канон APL (shared/patterns/admin-menu-canon.md) #}
         <div class="ai-nav__group">
-          <span class="ai-nav__group-label">Системные настройки</span>
+          <span class="ai-nav__group-label">Система</span>
           <div class="ai-nav__items">
             <a class="ai-nav__link {{ 'ai-nav__link--active' if request.path == '/admin' }}" href="/admin">
               <span class="ai-nav__icon">⚙️</span> Конфигурация
@@ -481,7 +533,7 @@
           </div>
         </div>
         <div class="ai-nav__group">
-          <span class="ai-nav__group-label">Операционная консоль</span>
+          <span class="ai-nav__group-label">Наблюдаемость</span>
           <div class="ai-nav__items">
             <a class="ai-nav__link {{ 'ai-nav__link--active' if request.path.startswith('/admin/executions') }}" href="/admin/executions">
               <span class="ai-nav__icon">📜</span> Логи
@@ -491,9 +543,22 @@
             </a>
           </div>
         </div>
+        <div class="ai-nav__group">
+          <span class="ai-nav__group-label">Справка</span>
+          <div class="ai-nav__items">
+            <a class="ai-nav__link {{ 'ai-nav__link--active' if request.path.startswith('/admin/legend') }}" href="/admin/legend">
+              <span class="ai-nav__icon">🗺️</span> Обозначения
+            </a>
+          </div>
+        </div>
       </nav>
 
       <div class="ai-sidebar__footer">
+        <button type="button" id="theme-toggle" class="ai-sidebar__logout"
+                title="Переключить тему консоли (сохраняется в браузере, общая с RF/AIC)">
+          <span id="theme-toggle__icon">☀️</span>
+          <span id="theme-toggle__label">Светлая тема</span>
+        </button>
         <form method="post" action="/admin/logout">
           <button type="submit" class="ai-sidebar__logout">⏻ Выйти</button>
         </form>
@@ -526,5 +591,28 @@
       </div>
     </div>
   </div>
+
+  <script>
+    // Переключатель темы (как в AIC): ☀️ на тёмной, 🌙 на светлой;
+    // выбор сохраняется в localStorage `ai-theme` (общий с RF/AIC).
+    (function () {
+      const btn = document.getElementById('theme-toggle');
+      if (!btn) return;
+      const icon = document.getElementById('theme-toggle__icon');
+      const label = document.getElementById('theme-toggle__label');
+      const sync = () => {
+        const light = document.documentElement.dataset.theme === 'light';
+        icon.textContent = light ? '🌙' : '☀️';
+        label.textContent = light ? 'Тёмная тема' : 'Светлая тема';
+      };
+      sync();
+      btn.addEventListener('click', () => {
+        const next = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
+        document.documentElement.dataset.theme = next;
+        try { localStorage.setItem('ai-theme', next); } catch (e) { /* без persist — тема просто не сохранится */ }
+        sync();
+      });
+    })();
+  </script>
 </body>
 </html>

@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.db.session import get_db_session
-from app.services.audit import client_ip
+from app.services.audit import AuditService, client_ip
 from app.services.demo_limiter import DemoLimiterService
 
 settings = get_settings()
@@ -79,6 +79,16 @@ async def start_demo_session(
         session_id=payload.session_id,
     )
     await db.commit()
+    # Аудит действий посетителя Web UI (основа анализа демо-витрины).
+    # Токен в details не пишется; ip — общий контур аудита.
+    await AuditService(db).log_audit(
+        action="demo.session_started",
+        resource_type="demo_session",
+        resource_id=str(demo.id),
+        user_role="visitor",
+        ip_address=client_ip(request),
+        details={"client_session_id": payload.session_id},
+    )
     return DemoStartResponse(
         token=demo.token,
         session_id=demo.session_id,

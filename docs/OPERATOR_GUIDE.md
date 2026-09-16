@@ -176,7 +176,10 @@ JSON-снимок. Шаг `llm_call` несёт `{provider, model, latency_ms, t
 фильтры (период / тип действия / тип ресурса — select-списки) + поиск по `user_id`,
 карточки 7/стр. Справа: параметры действия, исполнитель, metadata, JSON-снимок
 состояния. События: `admin.login_success` (admin/demo), `admin.config_update`,
-`admin.provider_test`, `admin.rbac_denied`, `auth.worker_denied`.
+`admin.provider_test`, `admin.rbac_denied`, `auth.worker_denied`, а также
+действия посетителей публичной витрины (role=`visitor`): `demo.session_started`,
+`review.create`, `demo.request_denied` — основа анализа демо-витрины
+(конверсия сессий в отправки, отказы по лимитам).
 
 ![Консоль /admin/audit: master-detail журнала](screenshots/RAR_admin_audit.png)
 

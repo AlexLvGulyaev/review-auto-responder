@@ -32,7 +32,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
-from fastapi.responses import RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -264,6 +264,19 @@ async def admin_panel(request: Request, db: AsyncSession = Depends(get_db_sessio
             "saved": request.query_params.get("saved") == "1",
             "test_result": test_result,
         },
+    )
+
+
+@router.get("/legend", response_class=HTMLResponse)
+async def admin_legend(request: Request):
+    """Страница «Обозначения» — легенда фактических обозначений консоли
+    (как в RF/AIC): чип → имя → пояснение. Только чтение, без мутаций."""
+    identity = _identity_from_request(request)
+    if identity is None:
+        return RedirectResponse(url="/admin/login", status_code=status.HTTP_303_SEE_OTHER)
+    return templates.TemplateResponse(
+        "legend.html",
+        {"request": request, "identity": identity, "is_demo": identity.is_demo},
     )
 
 

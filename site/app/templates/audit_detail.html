@@ -13,6 +13,11 @@
 <span class="ai-status {% if action_val in error_actions %}ai-status--error{% elif action_val in ok_actions %}ai-status--ok{% else %}ai-status--muted{% endif %}">{{ action_val }}</span>
 {%- endmacro %}
 
+{# Роль значком (канон Обозначений: 🛡️ админ / 🎭 демо / 👤 посетитель / 🚫 без роли). #}
+{% macro role_chip(role_val) -%}
+{% if role_val == 'admin' %}<span class="ai-status ai-status--emoji ai-status--ok" title="Роль: админ — полный доступ по токену оператора">🛡️</span>{% elif role_val == 'demo' %}<span class="ai-status ai-status--emoji ai-status--muted" title="Роль: демо — сессия только для просмотра">🎭</span>{% elif role_val == 'visitor' %}<span class="ai-status ai-status--emoji ai-status--ok" title="Роль: посетитель — действие на публичной витрине">👤</span>{% else %}<span class="ai-status ai-status--emoji ai-status--error" title="Событие без авторизации">🚫</span>{% endif %}
+{%- endmacro %}
+
 <section class="ai-card ai-detail-panel">
   <div class="ai-detail-head">
     <h2 class="ai-section__title">ДЕТАЛИЗАЦИЯ СОБЫТИЯ</h2>
@@ -29,7 +34,7 @@
     <div class="ai-section-box">
       <h4 class="ai-section-box__title">Параметры пользователя</h4>
       <div class="ai-compact-row"><span class="ai-compact-row__label">Пользователь</span><span class="ai-compact-row__value">{{ entry.user_name or entry.user_id or '—' }}</span></div>
-      <div class="ai-compact-row"><span class="ai-compact-row__label">Роль</span><span class="ai-compact-row__value">{{ entry.user_role or '—' }}</span></div>
+      <div class="ai-compact-row"><span class="ai-compact-row__label">Роль</span><span class="ai-compact-row__value">{{ role_chip(entry.user_role) }} {{ entry.user_role or '—' }}</span></div>
       <div class="ai-compact-row"><span class="ai-compact-row__label">IP-адрес</span><span class="ai-compact-row__value ai-compact-row__value--mono">{{ entry.ip_address or '—' }}</span></div>
       <div class="ai-compact-row"><span class="ai-compact-row__label">Время</span><span class="ai-compact-row__value">{{ entry.created_at.strftime('%Y-%m-%d %H:%M:%S') if entry.created_at else '—' }}</span></div>
     </div>

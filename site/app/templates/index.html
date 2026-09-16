@@ -151,6 +151,49 @@
     .demo-badge--empty { color: var(--error); }
     .demo-badge[hidden] { display: none; }
 
+    /* Кнопка перезапуска демо-сессии (появляется при исчерпании квоты). */
+    .demo-badge__restart {
+      margin-left: auto;
+      padding: 4px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--card);
+      color: var(--text);
+      cursor: pointer;
+      transition: border-color 0.2s ease, background 0.2s ease;
+    }
+    .demo-badge__restart:hover { border-color: var(--accent); background: #eef4fd; }
+    .demo-badge__restart:disabled { opacity: 0.7; cursor: wait; }
+
+    /* Возврат на страницу проекта в витрине AIP: ghost-круг слева вверху.
+       <button>, а не <a href> — иначе Chrome рисует статус-бабл с URL. */
+    .btn-project {
+      position: fixed;
+      top: 14px;
+      left: 14px;
+      z-index: 50;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 2.4rem;
+      height: 2.4rem;
+      padding: 0;
+      font-size: 1.15rem;
+      border: 1px solid var(--border);
+      border-radius: 50%;
+      background: var(--card);
+      color: var(--muted);
+      cursor: pointer;
+      transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+    }
+    .btn-project:hover {
+      color: var(--text);
+      border-color: var(--accent);
+      background: #eef4fd;
+    }
+
     .message {
       min-height: 20px;
       font-size: 14px;
@@ -305,6 +348,8 @@
   </style>
 </head>
 <body>
+  <button type="button" class="btn-project" onclick="goProject()"
+          title="Вернуться на страницу проекта в витрине AIP." aria-label="К проекту">&#8617;</button>
   <main class="container">
     <section class="hero">
       <h1>Форма отзывов</h1>
@@ -318,6 +363,7 @@
         <div id="demo-badge" class="demo-badge" hidden>
           <span class="demo-badge__dot"></span>
           <span id="demo-badge__text">Демо-сессия…</span>
+          <button id="demo-restart" type="button" class="demo-badge__restart" hidden>Начать новую сессию</button>
         </div>
         <form id="review-form">
           <label>
@@ -353,6 +399,7 @@
     const DEMO_KEY = "review_demo_token";
     const demoBadge = document.getElementById("demo-badge");
     const demoBadgeText = document.getElementById("demo-badge__text");
+    const demoRestartBtn = document.getElementById("demo-restart");
     let demoToken = localStorage.getItem(DEMO_KEY);
     let demoLimit = 0;
 
@@ -362,18 +409,28 @@
       return h;
     }
 
+    function showDemoRestart(visible) {
+      if (demoRestartBtn) demoRestartBtn.hidden = !visible;
+    }
+
     function updateDemoBadge(remaining) {
       if (!demoBadge) return;
       demoBadge.hidden = false;
       demoBadge.classList.remove("demo-badge--low", "demo-badge--empty");
       if (remaining <= 0) {
         demoBadge.classList.add("demo-badge--empty");
-        demoBadgeText.textContent = "Лимит демо-сессии исчерпан. Обновите страницу для новой сессии.";
+        // Квота исчерпана: простой «Обновите страницу» не работает (токен
+        // в localStorage жив до истечения TTL) — предлагаем честный
+        // перезапуск сессии кнопкой.
+        demoBadgeText.textContent = "Лимит демо-сессии исчерпан (0 из " + demoLimit + ").";
         if (submitButton) submitButton.disabled = true;
+        showDemoRestart(true);
         return;
       }
       if (remaining <= 2) demoBadge.classList.add("demo-badge--low");
       demoBadgeText.textContent = "Демо: осталось " + remaining + " из " + demoLimit;
+      if (submitButton) submitButton.disabled = false;
+      showDemoRestart(false);
     }
 
     function setDemoBadgeError(text) {
@@ -392,7 +449,17 @@
           headers: { "Content-Type": "application/json" },
           body: "{}"
         });
-        if (!resp.ok) { demoBadge.hidden = true; return null; }
+        if (!resp.ok) {
+          if (resp.status === 429) {
+            // IP-лимит (5 сессий/час): кнопкой перезапуска не поможем —
+            // честно сообщаем, когда ждать.
+            setDemoBadgeError("Слишком много демо-сессий с этого IP. Новые сессии откроются в течение часа.");
+            showDemoRestart(false);
+            return null;
+          }
+          demoBadge.hidden = true;
+          return null;
+        }
         const data = await resp.json();
         demoToken = data.token;
         demoLimit = data.requests_limit;
@@ -403,6 +470,18 @@
         return null;
       }
     }
+
+    // Перезапуск исчерпанной демо-сессии: старый токен выбрасывается,
+    // запрашивается новая сессия (считается в IP-лимит 5/час).
+    async function restartDemoSession() {
+      if (demoRestartBtn) demoRestartBtn.disabled = true;
+      localStorage.removeItem(DEMO_KEY);
+      demoToken = null;
+      const data = await startDemoSession();
+      if (demoRestartBtn) demoRestartBtn.disabled = false;
+      if (data) updateDemoBadge(data.requests_remaining);
+    }
+    if (demoRestartBtn) demoRestartBtn.addEventListener("click", restartDemoSession);
 
     async function ensureDemoSession() {
       if (!demoToken) await startDemoSession();
@@ -432,13 +511,17 @@
       const errorData = await response.json().catch(() => ({}));
       const detail = (typeof errorData.detail === "string" ? errorData.detail : "").toLowerCase();
       if (st === 401) {
-        setDemoBadgeError("Демо-сессия истекла. Обновите страницу, чтобы начать новую.");
-        throw new Error("Демо-сессия истекла. Обновите страницу, чтобы начать новую.");
+        setDemoBadgeError("Демо-сессия истекла.");
+        showDemoRestart(true);
+        throw new Error("Демо-сессия истекла. Нажмите «Начать новую сессию».");
       }
       if (st === 429) {
         if (detail.includes("rate")) throw new Error("Подождите несколько секунд перед следующим отзывом.");
-        setDemoBadgeError("Лимит демо-сессии исчерпан. Обновите страницу для новой сессии.");
-        throw new Error("Лимит демо-сессии исчерпан. Обновите страницу для новой сессии.");
+        // Квота исчерпана (detail: "Demo request quota exhausted..."):
+        // предлагаем перезапуск кнопкой, а не ложное «обновите страницу».
+        setDemoBadgeError("Лимит демо-сессии исчерпан.");
+        showDemoRestart(true);
+        throw new Error("Лимит демо-сессии исчерпан. Нажмите «Начать новую сессию».");
       }
       throw new Error("Демо-сессия недоступна. Обновите страницу, чтобы начать новую.");
     }
@@ -662,6 +745,20 @@
     ensureDemoSession();
     loadReviews();
     setInterval(loadReviews, 5000);
+  </script>
+
+  <script>
+    // Возврат на страницу проекта в витрине AIP. Из витрины страница
+    // открывается через window.open (data-console) — возвращаемся фокусом
+    // на открывшую вкладку; напрямую — переходом на страницу проекта.
+    function goProject() {
+      if (window.opener && !window.opener.closed) {
+        window.opener.focus();
+        window.close();
+        return;
+      }
+      window.location.href = "https://ai.alex-n8n.site/cases/review-auto-responder.html";
+    }
   </script>
 </body>
 </html>

@@ -19,9 +19,14 @@
 
 {# ── Макросы ───────────────────────────────────────────────────────────── #}
 {% macro action_badge(action_val) -%}
-{% set error_actions = ['admin.rbac_denied', 'admin.login_failed', 'auth.worker_denied'] %}
-{% set ok_actions = ['admin.login_success', 'admin.config_update', 'admin.provider_test'] %}
+{% set error_actions = ['admin.rbac_denied', 'admin.login_failed', 'auth.worker_denied', 'demo.request_denied'] %}
+{% set ok_actions = ['admin.login_success', 'admin.config_update', 'admin.provider_test', 'demo.session_started', 'review.create'] %}
 <span class="ai-status {% if action_val in error_actions %}ai-status--error{% elif action_val in ok_actions %}ai-status--ok{% else %}ai-status--muted{% endif %}">{{ action_val }}</span>
+{%- endmacro %}
+
+{# Роль значком (канон Обозначений: 🛡️ админ / 🎭 демо / 👤 посетитель / 🚫 без роли). #}
+{% macro role_chip(role_val) -%}
+{% if role_val == 'admin' %}<span class="ai-status ai-status--emoji ai-status--ok" title="Роль: админ — полный доступ по токену оператора">🛡️</span>{% elif role_val == 'demo' %}<span class="ai-status ai-status--emoji ai-status--muted" title="Роль: демо — сессия только для просмотра">🎭</span>{% elif role_val == 'visitor' %}<span class="ai-status ai-status--emoji ai-status--ok" title="Роль: посетитель — действие на публичной витрине">👤</span>{% else %}<span class="ai-status ai-status--emoji ai-status--error" title="Событие без авторизации">🚫</span>{% endif %}
 {%- endmacro %}
 
 {# Макрос правой панели деталей для ОДНОЙ записи аудита.
@@ -45,7 +50,7 @@
       <h4 class="ai-section-box__title">Параметры пользователя</h4>
       <div class="ai-compact-row"><span class="ai-compact-row__label">ID пользователя</span><span class="ai-compact-row__value ai-compact-row__value--mono">{{ e.user_id or '—' }}</span></div>
       <div class="ai-compact-row"><span class="ai-compact-row__label">Имя пользователя</span><span class="ai-compact-row__value">{{ e.user_name or '—' }}</span></div>
-      <div class="ai-compact-row"><span class="ai-compact-row__label">Роль</span><span class="ai-compact-row__value">{{ e.user_role or '—' }}</span></div>
+      <div class="ai-compact-row"><span class="ai-compact-row__label">Роль</span><span class="ai-compact-row__value">{{ role_chip(e.user_role) }} {{ e.user_role or '—' }}</span></div>
       <div class="ai-compact-row"><span class="ai-compact-row__label">IP-адрес</span><span class="ai-compact-row__value ai-compact-row__value--mono">{{ e.ip_address or '—' }}</span></div>
       <div class="ai-compact-row"><span class="ai-compact-row__label">Дата события</span><span class="ai-compact-row__value">{{ e.created_at.strftime('%Y-%m-%d %H:%M:%S') if e.created_at else '—' }}</span></div>
     </div>
@@ -123,6 +128,7 @@
         <div class="ai-log-card__head">
           <span class="muted">{{ e.created_at.strftime('%Y-%m-%d %H:%M:%S') if e.created_at else '—' }}</span>
           {{ action_badge(e.action) }}
+          {{ role_chip(e.user_role) }}
         </div>
         <div class="ai-log-card__title">{{ e.resource_type or '—' }}{% if e.resource_id %} / {{ e.resource_id }}{% endif %}</div>
         <div class="ai-log-card__meta">

@@ -3,7 +3,17 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Вход · Админка</title>
+  <title>Вход · Review Auto Responder Admin Console</title>
+  <script>
+    // Тема консоли применяется и на странице логина (без переключателя —
+    // здесь нет навигации). Ключ `ai-theme` общий с RF/AIC.
+    try {
+      document.documentElement.dataset.theme =
+        localStorage.getItem('ai-theme') === 'light' ? 'light' : 'dark';
+    } catch (e) {
+      document.documentElement.dataset.theme = 'dark';
+    }
+  </script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700&display=swap');
     :root {
@@ -11,9 +21,24 @@
       --ai-text:#f1f5f9; --ai-text-secondary:#cbd5e1; --ai-text-muted:#8b95a7;
       --ai-primary:#2f7bff; --ai-primary-hover:#1d62d9; --ai-error:#ef4444;
       --ai-warning:#f59e0b; --ai-radius:10px;
+      --ai-input:#0b0f19; --ai-surface-hover:#1e2538;
+      --ai-primary-light:rgba(47,123,255,0.12);
+      --ai-shadow:0 4px 12px rgba(0,0,0,0.35);
       --ai-font-display:'Outfit',-apple-system,BlinkMacSystemFont,sans-serif;
       --ai-font-body:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;
     }
+    /* Светлая тема — lab-эталон RF (значения из карты RF). */
+    :root[data-theme='light'] {
+      --ai-bg:#ffffff; --ai-surface:#e7ebf3; --ai-border:#97a5bd;
+      --ai-text:#16202f; --ai-text-secondary:#33415a; --ai-text-muted:#5a6880;
+      --ai-primary:#2563eb; --ai-primary-hover:#1d4ed8;
+      --ai-warning:#b45309; --ai-error:#dc2626;
+      --ai-input:#f4f6fa; --ai-surface-hover:#dfe5ef;
+      --ai-primary-light:rgba(37,99,235,0.12);
+      --ai-shadow:0 4px 12px rgba(15,23,42,0.12);
+    }
+    :root[data-theme='light'] .demo-note { border-color: rgba(180,83,9,0.25); background: rgba(180,83,9,0.08); }
+    :root[data-theme='light'] .error { border-color: rgba(220,38,38,0.2); background: rgba(220,38,38,0.08); }
     * { box-sizing: border-box; }
     body {
       margin: 0; min-height: 100vh;
@@ -23,81 +48,103 @@
       display: flex; align-items: center; justify-content: center;
       -webkit-font-smoothing: antialiased;
     }
+    /* Карточка входа — эталон RF (review-flow, rf-login-*): max-width 28rem,
+       центр, badge/h1/sub, поле Bearer token, три полновесные кнопки. */
     .card {
       background: var(--ai-surface); border: 1px solid var(--ai-border);
-      border-radius: var(--ai-radius); padding: 32px;
-      width: min(420px, calc(100% - 32px)); box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+      border-radius: var(--ai-radius); padding: 2rem;
+      width: min(28rem, calc(100% - 32px)); box-shadow: var(--ai-shadow);
     }
-    .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
-    .brand__icon {
-      width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;
-      border-radius: var(--ai-radius); background: rgba(47,123,255,0.12); font-size: 1.1rem;
+    .head { margin-bottom: 1.5rem; text-align: center; }
+    .badge {
+      margin-bottom: 1rem; display: inline-flex; width: 4rem; height: 4rem;
+      align-items: center; justify-content: center;
+      border-radius: var(--ai-radius); background: var(--ai-primary-light);
+      font-size: 1.875rem; line-height: 1;
     }
-    .brand__name { font-family: var(--ai-font-display); font-weight: 700; font-size: 1.1rem; }
-    h1 { font-family: var(--ai-font-display); font-size: 1.25rem; margin: 0 0 6px; }
-    .hint { margin: 0 0 20px; color: var(--ai-text-muted); font-size: 0.85rem; line-height: 1.5; }
-    label { display: block; font-size: 0.8rem; color: var(--ai-text-muted); margin-bottom: 6px; }
+    h1 { font-family: var(--ai-font-display); font-size: 1.5rem; font-weight: 700; margin: 0 0 0.5rem; color: var(--ai-text); }
+    .sub { margin: 0; font-size: 0.875rem; color: var(--ai-text-muted); }
+    form { display: flex; flex-direction: column; gap: 1rem; }
+    label {
+      display: block; margin-bottom: 0.25rem; font-size: 0.875rem;
+      font-weight: 500; color: var(--ai-text-secondary); cursor: help;
+    }
     input {
-      width: 100%; background: var(--ai-bg); border: 1px solid var(--ai-border);
-      border-radius: var(--ai-radius); color: var(--ai-text); padding: 12px 14px;
-      font: inherit; font-size: 0.9rem;
+      width: 100%; font: inherit; font-size: 0.875rem;
+      color: var(--ai-text); background: var(--ai-input);
+      border: 1px solid var(--ai-border); border-radius: var(--ai-radius);
+      padding: 0.75rem 1rem;
     }
     input:focus { outline: none; border-color: var(--ai-primary); }
     button {
-      margin-top: 16px; width: 100%; border: 0; border-radius: var(--ai-radius);
-      padding: 12px; background: var(--ai-primary); color: #fff;
-      font: inherit; font-weight: 600; cursor: pointer; transition: background 0.15s;
+      width: 100%; padding: 0.75rem 1rem; font: inherit; font-size: 0.875rem;
+      font-weight: 500; border: 1px solid transparent; border-radius: var(--ai-radius);
+      background: var(--ai-primary); color: #fff; cursor: pointer; transition: background 0.15s;
     }
-    button:hover { background: var(--ai-primary-hover); }
+    button:hover:not(:disabled) { background: var(--ai-primary-hover); }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
     .btn-outline {
-      background: transparent; color: var(--ai-text-secondary);
-      border: 1px solid var(--ai-border);
+      background: transparent; color: var(--ai-text);
+      border-color: var(--ai-border);
     }
-    .btn-outline:hover { background: rgba(255,255,255,0.04); border-color: var(--ai-primary); color: var(--ai-text); }
-    .divider {
-      display: flex; align-items: center; gap: 10px;
-      margin: 18px 0 0; color: var(--ai-text-muted); font-size: 0.75rem;
+    .btn-outline:hover:not(:disabled) { background: var(--ai-surface-hover); }
+    .btn-home {
+      display: block; font-size: 0.8125rem; background: transparent;
+      color: var(--ai-text-muted); text-decoration: none; text-align: center;
     }
-    .divider::before, .divider::after {
-      content: ""; flex: 1; height: 1px; background: var(--ai-border);
-    }
+    .btn-home:hover { background: var(--ai-surface-hover); color: var(--ai-text); }
     .demo-note {
-      margin-top: 12px; padding: 10px 12px; border-radius: var(--ai-radius);
+      padding: 0.75rem; border-radius: var(--ai-radius);
       border: 1px solid rgba(245,158,11,0.25); background: rgba(245,158,11,0.08);
-      color: var(--ai-warning); font-size: 0.82rem; line-height: 1.45;
+      color: var(--ai-warning); font-size: 0.875rem; line-height: 1.45;
     }
-    .error { color: var(--ai-error); font-size: 0.85rem; margin-top: 12px; }
-    .back { display: inline-block; margin-top: 16px; color: var(--ai-text-muted); font-size: 0.8rem; text-decoration: none; }
-    .back:hover { color: var(--ai-text); }
+    .error {
+      padding: 0.75rem; font-size: 0.875rem; color: var(--ai-error);
+      border: 1px solid rgba(239,68,68,0.2); border-radius: var(--ai-radius);
+      background: rgba(239,68,68,0.1);
+    }
   </style>
 </head>
 <body>
   <main class="card">
-    <div class="brand">
-      <span class="brand__icon">💬</span>
-      <span class="brand__name">Review Auto Responder</span>
+    <div class="head">
+      <div class="badge">💬</div>
+      <h1>Review Auto Responder Admin Console</h1>
+      <p class="sub">Введите Bearer token для доступа к панели управления.</p>
     </div>
-    <h1>Админка · вход</h1>
-    <p class="hint">Полный доступ — по токену оператора. Или войдите в демо-режим, чтобы посмотреть консоль без прав изменения.</p>
 
     <form method="post" action="/admin/login" autocomplete="off">
-      <label for="token">Токен полного доступа</label>
-      <input id="token" name="token" type="password" placeholder="вставьте токен" autofocus required>
-      <button type="submit">Войти</button>
+      <label for="token" title="Полный доступ к панели управления — по токену оператора.">Bearer token</label>
+      <input id="token" name="token" type="password" placeholder="Вставьте токен..." autofocus required>
       {% if error and error != 'demo_unavailable' %}<div class="error">{{ error }}</div>{% endif %}
-    </form>
-
-    <div class="divider">или</div>
-
-    <form method="post" action="/admin/login/demo" autocomplete="off">
-      <button type="submit" class="btn-outline">👁 Войти в демо-режим (только просмотр)</button>
+      <button type="submit">Войти</button>
+      <button type="submit" class="btn-outline" formaction="/admin/login/demo" formnovalidate
+              title="Демо-режим: посмотрите консоль без прав изменения (read-only).">Войти в демо-режим (только просмотр)</button>
     </form>
 
     {% if error == 'demo_unavailable' %}
       <div class="demo-note">Демо-вход отключён на этом экземпляре. Обратитесь к оператору за токеном доступа.</div>
     {% endif %}
 
-    <a class="back" href="/">← к отзывам</a>
+    <button type="button" class="btn-outline btn-home" onclick="goProject()"
+            title="Вернуться на страницу проекта в витрине AIP.">К проекту</button>
   </main>
+  <script>
+    /* «К проекту»: если консоль открыта из витрины (window.opener) —
+       фокусируем исходную вкладку и закрываем вкладку консоли;
+       при прямом заходе — обычный переход. Кнопка, а не <a href>:
+       у ссылки браузер показывает URL в статус-бабле (левый нижний
+       угол), владелец попросил этого не делать. */
+    function goProject() {
+      try {
+        if (window.opener && !window.opener.closed) {
+          window.opener.focus();
+          window.close();
+          return;
+        }
+      } catch (err) { /* обычный переход */ }
+      window.location.href = "https://ai.alex-n8n.site/cases/review-auto-responder.html";
+    }
+  </script>
 </body>
 </html>

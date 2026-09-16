@@ -1,0 +1,108 @@
+{% extends "admin_base.html" %}
+
+{% block title %}Обозначения · Review Auto Responder{% endblock %}
+
+{% block page_title %}Обозначения{% endblock %}
+{% block page_subtitle %}Что означают статусы, тональности и роли в консоли — и что за каждым из них делает система.{% endblock %}
+
+{% block content %}
+<style>
+  /* Канон RF/AIC: карточки-секции, строка = чип (фикс. ширина) →
+     пояснение. Три секции — один верхний ряд (решение владельца);
+     эмодзи в чипы не добавляются (решение владельца). */
+  .legend-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+  @media (min-width: 720px) {
+    .legend-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (min-width: 1100px) {
+    .legend-grid { grid-template-columns: repeat(3, 1fr); }
+  }
+  .legend-card {
+    background-color: var(--ai-surface);
+    border: 1px solid var(--ai-border);
+    border-radius: var(--ai-radius);
+    padding: 14px;
+    min-height: 290px;
+  }
+  .legend-card h3 {
+    font-family: var(--ai-font-display);
+    font-size: 0.95rem;
+    margin: 0 0 10px;
+  }
+  .legend-row {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding: 4px 0;
+  }
+  .legend-row__chip { flex-shrink: 0; min-width: 118px; }
+  .legend-row__chip .ai-status { display: inline-block; }
+  .legend-row__note { min-width: 0; flex: 1; font-size: 0.8125rem; color: var(--ai-text-secondary); line-height: 1.4; }
+</style>
+
+<div class="legend-grid">
+  <section class="legend-card">
+    <h3>Статус выполнения · Логи</h3>
+    <div class="legend-row">
+      <span class="legend-row__chip"><span class="ai-status ai-status--emoji ai-status--ok">✔︎ успешно</span></span>
+      <span class="legend-row__note">сессия дошла до конца: ответ сгенерирован и опубликован, все шаги трассы прошли без ошибок</span>
+    </div>
+    <div class="legend-row">
+      <span class="legend-row__chip"><span class="ai-status ai-status--emoji ai-status--error">❌ ошибка</span></span>
+      <span class="legend-row__note">сессия прервана на одном из шагов — ответ не опубликован; место сбоя видно в трассе сессии (статусы шагов «получен → сгенерирован → опубликован»)</span>
+    </div>
+    <div class="legend-row">
+      <span class="legend-row__chip"><span class="ai-status ai-status--emoji ai-status--warning">🔄 ожидание</span></span>
+      <span class="legend-row__note">сессия принята и ещё обрабатывается воркером; итог сменится на «успешно» или «ошибку» по завершении</span>
+    </div>
+    <div class="legend-row">
+      <span class="legend-row__chip"><span class="ai-status ai-status--emoji ai-status--muted">➖ пропущено</span></span>
+      <span class="legend-row__note">шаг пайплайна не выполнялся — например, уведомление Telegram, когда событие уже было отправлено ранее</span>
+    </div>
+  </section>
+
+  <section class="legend-card">
+    <h3>Тональность отзыва</h3>
+    <div class="legend-row">
+      <span class="legend-row__chip"><span class="ai-status ai-status--emoji ai-status--ok">👍 положительный</span></span>
+      <span class="legend-row__note">в тексте преобладают маркеры похвалы («спасибо», «понравилось», «рекомендую») — ответ строится в стиле благодарности</span>
+    </div>
+    <div class="legend-row">
+      <span class="legend-row__chip"><span class="ai-status ai-status--emoji ai-status--error">👎 отрицательный</span></span>
+      <span class="legend-row__note">перевешивают маркеры проблемы («не работает», «долго», «разочарован») — ответ строится в стиле извинения с приглашением в поддержку</span>
+    </div>
+    <div class="legend-row">
+      <span class="legend-row__chip"><span class="ai-status ai-status--emoji ai-status--muted">😐 нейтральный</span></span>
+      <span class="legend-row__note">маркеры тона не перевесили друг друга — ответ без благодарностей и извинений; тональность определяется подсчётом маркеров, а не LLM</span>
+    </div>
+    <div class="legend-row">
+      <span class="legend-row__chip"><span class="ai-status ai-status--emoji ai-status--muted">➖ —</span></span>
+      <span class="legend-row__note">тональность не определялась — отзыв ещё не обработан воркером или текста не было</span>
+    </div>
+  </section>
+
+  <section class="legend-card">
+    <h3>Роли пользователей</h3>
+    <div class="legend-row">
+      <span class="legend-row__chip"><span class="ai-status ai-status--emoji ai-status--ok">🛡️ админ</span></span>
+      <span class="legend-row__note">полный доступ по токену оператора: конфигурация, провайдеры, перезапуск сессий; все мутации в журнале аудита идут с этой ролью</span>
+    </div>
+    <div class="legend-row">
+      <span class="legend-row__chip"><span class="ai-status ai-status--emoji ai-status--muted">🎭 демо</span></span>
+      <span class="legend-row__note">сессия только для просмотра по демо-токену; изменения заблокированы на бэкенде, а не только скрыты в интерфейсе</span>
+    </div>
+    <div class="legend-row">
+      <span class="legend-row__chip"><span class="ai-status ai-status--emoji ai-status--ok">👤 посетитель</span></span>
+      <span class="legend-row__note">публичная витрина отзывов: старт демо-сессии, отправка отзыва, отказ по лимиту (demo.session_started, review.create, demo.request_denied) — основа анализа демо-витрины</span>
+    </div>
+    <div class="legend-row">
+      <span class="legend-row__chip"><span class="ai-status ai-status--emoji ai-status--error">🚫 без роли</span></span>
+      <span class="legend-row__note">события без авторизации: отказ по worker-токену (auth.worker_denied) и неудачные попытки входа — в аудите роль у них пустая</span>
+    </div>
+  </section>
+</div>
+{% endblock %}

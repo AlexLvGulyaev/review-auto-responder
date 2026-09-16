@@ -13,7 +13,7 @@ from app.models.demo_session import DemoSession
 from app.models.review import Review, ReviewStatus
 from app.api.worker_auth import require_worker_token
 from app.schemas import ReviewCreate, ReviewRead, ReviewUpdate
-from app.services.audit import client_ip
+from app.services.audit import AuditService, client_ip
 from app.services.demo_limiter import DemoLimiterService
 
 
@@ -52,7 +52,19 @@ async def require_demo_or_worker(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="X-Demo-Token header is required. Call POST /api/demo/start.",
         )
-    return await DemoLimiterService(db).check_and_record_request(token, client_ip(request))
+    try:
+        return await DemoLimiterService(db).check_and_record_request(token, client_ip(request))
+    except HTTPException as exc:
+        # Аудит отказов посетителю (квота/лимит/истёкший токен) — для анализа
+        # демо-витрины. Отказ возникает до мутации квоты, сессия чистая.
+        await AuditService(db).log_audit(
+            action="demo.request_denied",
+            resource_type="demo_session",
+            user_role="visitor",
+            ip_address=client_ip(request),
+            details={"reason": exc.detail, "http_status": exc.status_code},
+        )
+        raise
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -125,6 +137,23 @@ async def create_review(
         request.client.host if request.client else None,
         demo_session is not None,
     )
+    # Аудит отправки отзыва посетителем Web UI — ключевое действие для
+    # анализа демо-витрины. Путь воркера (внутренний) не аудитируется:
+    # pipeline-активность трассируется в executions. Текст и имя автора
+    # в details не пишутся (персональные данные).
+    if demo_session is not None:
+        await AuditService(session).log_audit(
+            action="review.create",
+            resource_type="review",
+            resource_id=str(review.id),
+            user_role="visitor",
+            ip_address=client_ip(request),
+            details={
+                "parent_id": review.parent_id,
+                "text_length": len(review.text),
+                "demo_session_id": demo_session.id,
+            },
+        )
     return review
 
 

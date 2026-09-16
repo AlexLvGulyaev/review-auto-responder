@@ -43,12 +43,17 @@ AUDIT_ACTIONS = [
     "admin.config_update",
     "admin.provider_test",
     "auth.worker_denied",
+    "demo.session_started",
+    "demo.request_denied",
+    "review.create",
 ]
 AUDIT_RESOURCE_TYPES = [
     "admin_session",
     "runtime_config",
     "provider",
     "worker_api",
+    "demo_session",
+    "review",
 ]
 
 

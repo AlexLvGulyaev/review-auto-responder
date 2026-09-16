@@ -405,6 +405,9 @@ demo допущен).
 | `admin.provider_test` | кнопка «Проверить» | provider, ok, latency/tokens/message, error |
 | `admin.rbac_denied` | demo-попытка мутации → 403 | ip, path |
 | `auth.worker_denied` | плохой/отсутствующий `X-Worker-Token` → 401 | ip, path |
+| `demo.session_started` | посетитель открыл демо-сессию (`POST /api/demo/start`) | role=visitor, ip, client_session_id |
+| `review.create` | посетитель отправил отзыв через Web UI | role=visitor, ip, parent_id, text_length, demo_session_id (текст и имя автора не пишутся) |
+| `demo.request_denied` | отказ посетителю: квота/rate-limit/истёкший токен | role=visitor, ip, reason, http_status |
 
 ### 📊 8.4. Сводная таблица сигналов
 

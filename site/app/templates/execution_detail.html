@@ -8,11 +8,11 @@
 
 {# Макросы (дублируем из executions.html — макросы не наследуются). #}
 {% macro status_badge(status_val) -%}
-<span class="ai-status {% if status_val == 'ok' %}ai-status--ok{% elif status_val == 'error' %}ai-status--error{% else %}ai-status--warning{% endif %}">{% if status_val == 'ok' %}успешно{% elif status_val == 'error' %}ошибка{% else %}ожидание{% endif %}</span>
+<span class="ai-status ai-status--emoji {% if status_val == 'ok' %}ai-status--ok{% elif status_val == 'error' %}ai-status--error{% elif status_val == 'skipped' %}ai-status--muted{% else %}ai-status--warning{% endif %}" {% if status_val == 'ok' %}title="Успешно: завершилось без ошибок"{% elif status_val == 'error' %}title="Ошибка: прервано, результат не сохранён"{% elif status_val == 'skipped' %}title="Пропущено"{% else %}title="Ожидание: ещё обрабатывается"{% endif %}>{% if status_val == 'ok' %}✔︎{% elif status_val == 'error' %}❌{% elif status_val == 'skipped' %}➖{% else %}🔄{% endif %}</span>
 {%- endmacro %}
 
 {% macro tone_badge(tone_val) -%}
-{% if tone_val == 'positive' %}<span class="ai-status ai-status--ok">положительный</span>{% elif tone_val == 'negative' %}<span class="ai-status ai-status--error">отрицательный</span>{% elif tone_val == 'neutral' %}<span class="ai-status ai-status--muted">нейтральный</span>{% else %}<span class="ai-status ai-status--muted">—</span>{% endif %}
+{% if tone_val == 'positive' %}<span class="ai-status ai-status--emoji ai-status--ok" title="Положительный: ответ в стиле благодарности">👍</span>{% elif tone_val == 'negative' %}<span class="ai-status ai-status--emoji ai-status--error" title="Отрицательный: ответ в стиле извинения">👎</span>{% elif tone_val == 'neutral' %}<span class="ai-status ai-status--emoji ai-status--muted" title="Нейтральный: без благодарностей и извинений">😐</span>{% else %}<span class="ai-status ai-status--emoji ai-status--muted" title="Тональность не определялась">➖</span>{% endif %}
 {%- endmacro %}
 
 {% macro stage_label(name) -%}
