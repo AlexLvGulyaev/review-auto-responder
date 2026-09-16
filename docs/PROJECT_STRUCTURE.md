@@ -1,15 +1,11 @@
 # 📂 PROJECT_STRUCTURE.md — Review Auto Responder
 
-**Проект:** review-auto-responder
-**Дата:** 2026-08-14
-**Статус:** Engineering Layer — карта репозитория для инженеров и интеграторов.
-
 Полное файловое дерево публичного репозитория с комментарием на каждый файл.
-Краткая сводка для README — в [🏠 `README.md` §8](../README.md#-8-структура-проекта).
+Краткая сводка для README — в [🏠 `README.md` §10](../README.md#-10-структура-проекта).
 
 ---
 
-## 📁 Дерево репозитория
+## 📁 1. Дерево репозитория
 
 ```text
 review-auto-responder/
@@ -107,9 +103,14 @@ review-auto-responder/
 
 ---
 
-## 📚 Связанные документы
+## 📚 2. Связанные документы
 
 - [🏠 `README.md`](../README.md) — главная страница проекта.
 - [🏗️ `docs/ARCHITECTURE.md`](ARCHITECTURE.md) — архитектура, C4-схемы, модель данных.
 - [📋 `docs/IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) — технический план и состав компонентов.
 - [🔌 `docs/API_CONTRACT.md`](API_CONTRACT.md) — контракты HTTP API.
+---
+
+**Статус:** Engineering Layer — карта репозитория
+**Последнее обновление:** 2026-09-16
+**История изменений:** [📝 CHANGE_LOG.md](CHANGE_LOG.md#-1-история-изменений-документации)

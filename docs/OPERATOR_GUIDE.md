@@ -1,9 +1,5 @@
 # 🎛️ OPERATOR_GUIDE.md — Review Auto Responder
 
-**Проект:** review-auto-responder
-**Дата:** 2026-08-14
-**Статус:** Руководство оператора: как менять поведение системы без программирования, пересборки и рестарта контейнера.
-
 > 🌐 Адреса: живое демо — `https://review-auto-responder.alex-n8n.site/admin`;
 > локальный инстанс — `http://localhost:8000/admin` (по [🚀 DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)).
 
@@ -107,7 +103,7 @@ fallback=openai model=GigaChat-Max`; ответ сгенерирован чер�
 
 *«Проверить»: toast-flash с latency и токенами — ключи остались на воркере.*
 
-**Ключевое:** LLM-ключи живут **только на внутреннем воркере** — публичный сайт
+**Важно:** LLM-ключи живут **только на внутреннем воркере** — публичный сайт
 их не получает. Событие пишется в аудит (`admin.provider_test`).
 
 ---
@@ -210,7 +206,7 @@ JSON-снимок. Шаг `llm_call` несёт `{provider, model, latency_ms, t
 
 ---
 
-## 📚 Связанные документы
+## 📚 9. Связанные документы
 
 - [🏠 `README.md`](../README.md) — главная страница проекта и живое демо.
 - [🎬 `docs/E2E_SCENARIOS.md`](E2E_SCENARIOS.md) — сквозные демо-сценарии.
@@ -220,3 +216,8 @@ JSON-снимок. Шаг `llm_call` несёт `{provider, model, latency_ms, t
 - [🛡️ `docs/SECURITY_NOTES.md`](SECURITY_NOTES.md) — демо-RBAC и безопасность.
 - [🤖 `docs/EXTERNAL_PROVIDERS.md`](EXTERNAL_PROVIDERS.md) — параметры LLM-провайдеров.
 - [🚀 `docs/DEPLOYMENT_GUIDE.md`](DEPLOYMENT_GUIDE.md) — развёртывание и smoke-тест.
+---
+
+**Статус:** Руководство оператора: параметры без программирования, пересборки и рестарта
+**Последнее обновление:** 2026-09-16
+**История изменений:** [📝 CHANGE_LOG.md](CHANGE_LOG.md#-1-история-изменений-документации)

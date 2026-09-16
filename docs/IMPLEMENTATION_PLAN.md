@@ -1,11 +1,5 @@
 # 📋 IMPLEMENTATION_PLAN.md — Review Auto Responder
 
-**Проект:** review-auto-responder
-**Дата:** 2026-08-14
-**Статус:** ✅ Реализован. Технический план доработанной версии на базе legacy-репозиториев-референсов (`github.com/MrGAN12009/worker_ai`, `app_test_2803`). Все этапы выполнены, Deployment Validation 18/18 PASS.
-
----
-
 ## 🎯 1. Архитектура решения
 
 ```mermaid
@@ -224,7 +218,7 @@ flowchart TD
 
 ---
 
-## 📚 Связанные документы
+## 📚 7. Связанные документы
 
 - [🏠 `README.md`](../README.md) — главная страница проекта.
 - [📊 `docs/PROJECT_STATE.md`](PROJECT_STATE.md) — паспорт состояния.
@@ -234,3 +228,8 @@ flowchart TD
 - [🔐 `docs/SECURITY_NOTES.md`](SECURITY_NOTES.md) — безопасность и демо-RBAC.
 - [🤖 `docs/EXTERNAL_PROVIDERS.md`](EXTERNAL_PROVIDERS.md) — LLM-провайдеры.
 - [✅ `docs/DEPLOYMENT_VALIDATION_REPORT.md`](DEPLOYMENT_VALIDATION_REPORT.md) — отчёт воспроизводимости.
+---
+
+**Статус:** Реализован (все этапы, Deployment Validation 18/18 PASS); на базе legacy-репозиториев-референсов (github.com/MrGAN12009/worker_ai, app_test_2803)
+**Последнее обновление:** 2026-09-16
+**История изменений:** [📝 CHANGE_LOG.md](CHANGE_LOG.md#-1-история-изменений-документации)

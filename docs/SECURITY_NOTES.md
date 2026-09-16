@@ -1,11 +1,5 @@
 # 🛡️ SECURITY_NOTES.md — Review Auto Responder
 
-**Проект:** review-auto-responder
-**Дата:** 2026-08-14
-**Статус:** Engineering Layer — безопасность, доступ, демо-RBAC.
-
----
-
 ## 🔐 1. Секреты
 
 | Секрет | Где | Назначение |
@@ -166,8 +160,13 @@ IP-адрес извлекается по цепочке `X-Forwarded-For` → `
 
 ---
 
-## 📚 Связанные документы
+## 📚 8. Связанные документы
 
 - [🔌 `docs/API_CONTRACT.md`](API_CONTRACT.md) — контракты HTTP API.
 - [🤖 `docs/EXTERNAL_PROVIDERS.md`](EXTERNAL_PROVIDERS.md) — параметры провайдеров.
 - [🚀 `docs/DEPLOYMENT_GUIDE.md`](DEPLOYMENT_GUIDE.md) — развёртывание и env.
+---
+
+**Статус:** Engineering Layer — безопасность, доступ, демо-RBAC
+**Последнее обновление:** 2026-09-16
+**История изменений:** [📝 CHANGE_LOG.md](CHANGE_LOG.md#-1-история-изменений-документации)

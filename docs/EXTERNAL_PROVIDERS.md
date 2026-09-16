@@ -1,14 +1,10 @@
 # 🤖 EXTERNAL_PROVIDERS.md — Review Auto Responder
 
-**Проект:** review-auto-responder
-**Дата:** 2026-08-14
-**Статус:** исследовательская справка. Source of Truth — официальные доки провайдеров + код адаптеров (правило: внешняя интеграция — официальная документация, не память модели).
-
 Оба провайдера унифицированы на **Chat Completions** (`/chat/completions`, сообщения `system`+`user`). Legacy использовал OpenAI `responses.create`; доработка переводит всё на Chat Completions ради единой абстракции `ResponseProvider`.
 
 ---
 
-## 📋 Краткая сводка
+## 📋 1. Краткая сводка
 
 | Провайдер | base_url | Модель (по умолчанию) | Auth | Drop-in OpenAI SDK |
 |-----------|----------|----------------------|------|--------------------|
@@ -19,7 +15,7 @@
 
 ---
 
-## 🟢 1. OpenAI (OpenAI-compatible)
+## 🟢 2. OpenAI (OpenAI-compatible)
 
 - **base_url:** `https://api.openai.com/v1` (редактируется в `/admin`, поле `openai_base_url`). Любой OpenAI-compatible endpoint указывается через `base_url`.
 - **Модель:** `gpt-4.1-mini` (редактируется в `/admin`, поле `openai_model`).
@@ -32,7 +28,7 @@
 
 ---
 
-## 🤖 2. GigaChat (Сбер) — НЕ drop-in, требуется адаптер
+## 🤖 3. GigaChat (Сбер) — НЕ drop-in, требуется адаптер
 
 - **base_url:** `https://gigachat.devices.sberbank.ru/api/v1` (в `.env` воркера, read-only в карточке). Фиксированный эндпоинт Сбера с OAuth-обменом и сертификатом Минцифры — константа развёртывания, смена требует правки `.env` и рестарта. У OpenAI `base_url`, в отличие от GigaChat, редактируемый в `/admin` — для OpenAI-compatible endpoints (Azure, локальные LLM, прокси).
 - **Модель:** `GigaChat-Max` (редактируется в `/admin`, поле `gigachat_model`).
@@ -51,13 +47,13 @@
 
 ---
 
-## 🔌 3. Fallback (LLM-chain + словарные шаблоны)
+## 🔌 4. Fallback (LLM-chain + словарные шаблоны)
 
 Цепочка fallback в `processor.generate_response`: **активный LLM → fallback LLM** (если включён через `*_enabled`, сконфигурирован и отличается от активного) **→ словарные шаблоны** (`build_fallback_response` по определённому тону: позитивный/негативный/нейтральный). `meta` фиксирует провайдера-победителя и `fallback_reason`. Система продолжает отвечать даже без ключей — dict-fallback не падает.
 
 ---
 
-## 🔧 4. Источники
+## 🔧 5. Источники
 
 - [Sber developers — GigaChat OpenAI-compatible mode](https://developers.sber.ru/docs/ru/gigachat/guides/compatible-openai.md)
 - [OpenAI API reference — Chat Completions](https://platform.openai.com/docs/api-reference/chat)
@@ -65,8 +61,13 @@
 
 ---
 
-## 📚 Связанные документы
+## 📚 6. Связанные документы
 
 - [🏗️ `docs/ARCHITECTURE.md`](ARCHITECTURE.md) — архитектура, мультипровайдерность, runtime-config.
 - [🔌 `docs/API_CONTRACT.md`](API_CONTRACT.md) — `/admin` поля.
 - [🛡️ `docs/SECURITY_NOTES.md`](SECURITY_NOTES.md) — секреты провайдеров в `.env`.
+---
+
+**Статус:** Исследовательская справка. Source of Truth — официальные доки провайдеров + код адаптеров
+**Последнее обновление:** 2026-09-16
+**История изменений:** [📝 CHANGE_LOG.md](CHANGE_LOG.md#-1-история-изменений-документации)

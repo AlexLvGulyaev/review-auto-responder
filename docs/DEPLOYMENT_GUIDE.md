@@ -1,9 +1,5 @@
 # 🚀 DEPLOYMENT_GUIDE.md — Review Auto Responder
 
-**Проект:** review-auto-responder
-**Дата:** 2026-08-14
-**Статус:** Source of Truth воспроизводимости развёртывания.
-
 > 📌 **SOT-дисциплина:** этот документ — единственный источник истины процесса развёртывания. Критерий качества — **успешное развёртывание по инструкции**, а не качество текста. Если после полного выполнения система не работоспособна — документ не актуален. Валидация — запуском в чистом окружении (см. [✅ DEPLOYMENT_VALIDATION_REPORT.md](DEPLOYMENT_VALIDATION_REPORT.md)).
 
 ---
@@ -483,7 +479,7 @@ curl -i https://review-auto-responder.example.com/health    # → 200 {"status":
 
 ---
 
-## 📚 Связанные документы
+## 📚 9. Связанные документы
 
 - [🏠 `README.md`](../README.md) — главная страница проекта.
 - [🏗️ `docs/ARCHITECTURE.md`](ARCHITECTURE.md) — архитектура и путь данных.
@@ -491,3 +487,8 @@ curl -i https://review-auto-responder.example.com/health    # → 200 {"status":
 - [🛡️ `docs/SECURITY_NOTES.md`](SECURITY_NOTES.md) — безопасность и демо-RBAC.
 - [🤖 `docs/EXTERNAL_PROVIDERS.md`](EXTERNAL_PROVIDERS.md) — параметры LLM-провайдеров.
 - [✅ `docs/DEPLOYMENT_VALIDATION_REPORT.md`](DEPLOYMENT_VALIDATION_REPORT.md) — отчёт воспроизводимости в чистом окружении.
+---
+
+**Статус:** Source of Truth воспроизводимости развёртывания
+**Последнее обновление:** 2026-09-16
+**История изменений:** [📝 CHANGE_LOG.md](CHANGE_LOG.md#-1-история-изменений-документации)

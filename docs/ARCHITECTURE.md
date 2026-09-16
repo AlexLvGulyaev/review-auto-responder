@@ -1,10 +1,6 @@
 # 🏗️ ARCHITECTURE.md — Review Auto Responder
 
-**Проект:** review-auto-responder
-**Дата:** 2026-08-14
-**Статус:** Engineering Layer — архитектура и путь данных.
-
----
+<img src="screenshots/RAR_portfolio_dark.png" alt="Review Auto Responder — витрина кейса: публичный сайт отзывов с AI-ответами и операторская консоль (DARK)">
 
 ## 🎯 1. Архитектурные принципы
 
@@ -176,7 +172,7 @@ erDiagram
     execution_steps }o--|| execution_sessions : "session_id (CASCADE)"
 ```
 
-**Ключевые факты модели:**
+**Главные факты модели:**
 
 - **`reviews` — threaded-структура.** Ответ воркера — это строка `reviews` с
   `parent_id = <id отзыва>`, `name = AI_AUTHOR_NAME`, `status = new` (дочерний
@@ -465,7 +461,7 @@ flowchart LR
 
 ---
 
-## 📚 Связанные документы
+## 📚 10. Связанные документы
 
 - [🏠 `README.md`](../README.md) — главная страница проекта.
 - [📋 `docs/PROJECT_STATE.md`](PROJECT_STATE.md) — паспорт состояния проекта.
@@ -475,3 +471,8 @@ flowchart LR
 - [🛡️ `docs/SECURITY_NOTES.md`](SECURITY_NOTES.md) — безопасность и демо-RBAC.
 - [🚀 `docs/DEPLOYMENT_GUIDE.md`](DEPLOYMENT_GUIDE.md) — развёртывание с нуля.
 - [✅ `docs/DEPLOYMENT_VALIDATION_REPORT.md`](DEPLOYMENT_VALIDATION_REPORT.md) — отчёт воспроизводимости.
+---
+
+**Статус:** Engineering Layer — архитектура и путь данных
+**Последнее обновление:** 2026-09-16
+**История изменений:** [📝 CHANGE_LOG.md](CHANGE_LOG.md#-1-история-изменений-документации)

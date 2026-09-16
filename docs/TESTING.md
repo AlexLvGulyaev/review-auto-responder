@@ -1,10 +1,5 @@
 # 🧪 TESTING.md — Review Auto Responder
 
-**Проект:** review-auto-responder
-**Версия:** 1.0
-**Дата:** 2026-08-14
-**Статус:** Active — Deployment Validation пройдена (v1.5), ручные E2E-сценарии, программные smoke-проверки конвейера.
-
 > 📌 **Важно.** У проекта нет pytest-набора unit/integration-тестов. Проверка ведётся
 > на четырёх уровнях: воспроизведение с нуля (L1), ручные сквозные сценарии (L2),
 > программные smoke-проверки детерминированного ядра (L3), верификация провайдеров
@@ -200,11 +195,8 @@ docker compose exec review-worker python healthcheck.py   # healthcheck OK: hear
 - [🛡️ `docs/SECURITY_NOTES.md`](SECURITY_NOTES.md) — демо-RBAC и демо-лимиттер.
 - [🤖 `docs/EXTERNAL_PROVIDERS.md`](EXTERNAL_PROVIDERS.md) — параметры LLM-провайдеров (L4).
 - [🔌 `docs/API_CONTRACT.md`](API_CONTRACT.md) — контракты HTTP API.
-
 ---
 
-## 📜 10. История изменений
-
-| Дата | Версия | Изменение |
-|------|--------|-----------|
-| 2026-08-14 | 1.0 | Стратегия тестирования: 4 уровня (L1–L4), smoke-команды, roadmap pytest. |
+**Статус:** Active — Deployment Validation пройдена (v1.5), ручные E2E и smoke-проверки
+**Последнее обновление:** 2026-09-16
+**История изменений:** [📝 CHANGE_LOG.md](CHANGE_LOG.md#-1-история-изменений-документации)

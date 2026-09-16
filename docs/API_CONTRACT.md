@@ -1,9 +1,5 @@
 # 🔌 API_CONTRACT.md — Review Auto Responder
 
-**Проект:** review-auto-responder
-**Дата:** 2026-08-14
-**Статус:** Engineering Layer — контракты HTTP API сайта.
-
 Базовый URL сайта: `http://localhost:8000` (после `docker compose up`).
 
 ---
@@ -391,9 +387,14 @@ HTML: параметры сессии (статус/провайдер/моде�
 
 ---
 
-## 📚 Связанные документы
+## 📚 5. Связанные документы
 
 - [🏗️ `docs/ARCHITECTURE.md`](ARCHITECTURE.md) — архитектура и путь данных.
 - [🛡️ `docs/SECURITY_NOTES.md`](SECURITY_NOTES.md) — безопасность и демо-RBAC.
 - [🤖 `docs/EXTERNAL_PROVIDERS.md`](EXTERNAL_PROVIDERS.md) — параметры провайдеров.
 - [🚀 `docs/DEPLOYMENT_GUIDE.md`](DEPLOYMENT_GUIDE.md) — развёртывание.
+---
+
+**Статус:** Engineering Layer — контракты HTTP API сайта
+**Последнее обновление:** 2026-09-16
+**История изменений:** [📝 CHANGE_LOG.md](CHANGE_LOG.md#-1-история-изменений-документации)

@@ -1,14 +1,9 @@
 # 📄 SPEC.md — Продуктовая спецификация Review Auto Responder
 
-**Проект:** review-auto-responder
-**Версия:** 1.0
-**Дата:** 2026-08-14
-**Статус:** Frozen baseline v1.0
-
 > 🧊 **Frozen baseline v1.0.** Этот SPEC зафиксирован как продуктовый baseline
 > версии 1.0. Дальнейшая эволюция системы (observability v1.1, AIP Dark v1.2,
 > конфиг-консоль v1.3–v1.4, демо-стандарт входа + сессионные лимиты v1.5) описана в
-> [README §9](../README.md) и [PROJECT_STATE §9](PROJECT_STATE.md) и **не входит** в
+> [README §11](../README.md) и [PROJECT_STATE §9](PROJECT_STATE.md) и **не входит** в
 >scope этого SPEC. Известные расхождения baseline vs as-built:
 > - **Yandex-провайдер** (§1.3, §4.2 F-WORK-5, §6, §7) — реализован в v1.0, **удалён
 >   в v1.3**; текущий as-built = OpenAI / GigaChat (см. [EXTERNAL_PROVIDERS](EXTERNAL_PROVIDERS.md)).
@@ -239,12 +234,8 @@ Review Auto Responder — автономный ассистент, которы�
 - [📋 `docs/IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) — технический план реализации.
 - [🏗️ `docs/ARCHITECTURE.md`](ARCHITECTURE.md) — архитектура и путь данных.
 - [🚀 `docs/DEPLOYMENT_GUIDE.md`](DEPLOYMENT_GUIDE.md) — развёртывание с нуля.
-
 ---
 
-## 📝 10. История изменений
-
-| Дата | Версия | Изменение |
-|------|--------|-----------|
-| 2026-08-13 | 1.0 | Draft SPEC: назначение, роли, сценарии, требования, границы v1.0 |
-| 2026-08-13 | 1.1 | Утверждён web-`/admin` runtime-config: F-SITE-8, F-WORK-13, роли, критерии, границы v1.0 обновлены |
+**Статус:** Frozen baseline v1.0
+**Последнее обновление:** 2026-09-16
+**История изменений:** [📝 CHANGE_LOG.md](CHANGE_LOG.md#-1-история-изменений-документации)

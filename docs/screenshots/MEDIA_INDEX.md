@@ -1,11 +1,5 @@
 # 🖼️ MEDIA_INDEX.md — каталог скриншотов Review Auto Responder
 
-**Проект:** review-auto-responder
-**Дата:** 2026-08-14
-**Статус:** Заполнен (15 изображений)
-
----
-
 ## 📝 1. Правила нейминга
 
 Формат: `RAR_{CATEGORY}_{DESCRIPTION}.{ext}`
@@ -17,6 +11,7 @@
 | `tg` | Telegram-уведомления оператору (внешний канал доставки) | `RAR_tg_review_notification.png` |
 | `arch` | Архитектурные схемы (опционально, если Mermaid рендерится плохо) | `RAR_architecture_mermaid.png` |
 | `demo` | Демонстрационные GIF/видео (опционально) | `RAR_demo_walkthrough.gif` |
+| `portfolio` | Витринные пары кейса (светлая/тёмная тема) | `RAR_portfolio_light.png` |
 
 ---
 
@@ -39,6 +34,8 @@
 | IMG-013 | `RAR_admin_prompt_change.png` | admin | Смена системного промпта в runtime: оператор правит текст и сохраняет — `system_prompt.md` на shared volume перезаписывается (файл-SOT, bootstrap из вшитого `prompts/v1/system.md`) и применяется на следующем цикле опроса без рестарта. Мутация доступна только полному токену (demo → 403) | DEPLOYMENT_GUIDE, SYSTEM_DEMO, E2E_SCENARIOS, OPERATOR_GUIDE |
 | IMG-014 | `RAR_admin_prompt_applied.png` | site | Эффект смены промпта в runtime: после сохранения нового `system_prompt.md` воркер применяет его на следующем цикле — новый отзыв получает ответ уже по изменённому промпту (видна разница стиля/подписи рядом со старым ответом). Рестарт не требуется | SYSTEM_DEMO, E2E_SCENARIOS, OPERATOR_GUIDE |
 | IMG-015 | `RAR_tg_review_notification.png` | tg | Telegram-уведомление оператору о новом отзыве: текст отзыва и определённая тональность. Оператор мгновенно видит негатив и может подключиться лично там, где автономный AI-ответ не решает вопрос. Этап `telegram` в execution-трейсе фиксирует отправку | README, USER_GUIDE, SYSTEM_DEMO, E2E_SCENARIOS |
+| IMG-016 | `RAR_portfolio_light.png` | portfolio | Витрина кейса — светлая тема | README.md (hero, LIGHT) |
+| IMG-017 | `RAR_portfolio_dark.png` | portfolio | Витрина кейса — тёмная тема | ARCHITECTURE.md (hero, DARK) |
 
 ---
 
@@ -65,3 +62,17 @@
 4. Не добавлять изображения без явного назначения.
 5. Скриншоты UI/API только; архитектурные схемы — в Mermaid внутри Markdown.
 6. В подписях не упоминать имена секретов (`ADMIN_TOKEN`, `ADMIN_DEMO_TOKEN`, `WORKER_API_TOKEN`) — только роли/назначение.
+
+---
+
+## 📚 5. Связанные документы
+
+- [🏠 `README.md`](../../README.md) — главная страница проекта (hero — LIGHT-пара).
+- [🏗️ `docs/ARCHITECTURE.md`](../ARCHITECTURE.md) — архитектура (hero — DARK-пара).
+- [🎬 `docs/E2E_SCENARIOS.md`](../E2E_SCENARIOS.md) — сценарии, по которым снимались скриншоты.
+- [🚀 `docs/DEPLOYMENT_GUIDE.md`](../DEPLOYMENT_GUIDE.md) — шаги развёртывания с иллюстрациями.
+---
+
+**Статус:** Заполнен (17 изображений)
+**Последнее обновление:** 2026-09-16
+**История изменений:** [📝 CHANGE_LOG.md](../CHANGE_LOG.md#-1-история-изменений-документации)
